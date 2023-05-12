@@ -3,10 +3,7 @@ import locale
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-import database_config as cfg
 from tqdm import tqdm
-from utils import setup_connection
-from sqlalchemy import text
 from sklearn.model_selection import train_test_split
 
 locale.setlocale(locale.LC_TIME, 'pt_BR')
@@ -125,6 +122,9 @@ def load_data():
     try:
         ts_df = pd.read_pickle('ts_df.pkl')
     except:
+        from utils import setup_connection
+        from sqlalchemy import text
+        import database_config as cfg
         _, con = setup_connection(cfg.dw_path)
         query = text("""
             SELECT
