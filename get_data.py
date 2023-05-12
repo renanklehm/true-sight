@@ -7,6 +7,7 @@ import database_config as cfg
 from tqdm import tqdm
 from utils import setup_connection
 from sqlalchemy import text
+from sklearn.model_selection import train_test_split
 
 locale.setlocale(locale.LC_TIME, 'pt_BR')
 date_descriptions = {}
@@ -25,7 +26,7 @@ month_names = {
     12: 'Dezembro'
 }
 
-def get_data(input_seq, output_seq, id_max_size, date_max_size):
+def get_data(input_seq, output_seq, padding_step, id_max_size, date_max_size):
     while True:
         try:
             ts_df = load_data()
@@ -39,39 +40,49 @@ def get_data(input_seq, output_seq, id_max_size, date_max_size):
     id_vectorizer = get_vectorizer(id_corpus, id_max_size)
     date_vectorizer = get_vectorizer(date_corpus, date_max_size)
 
-    grouped_data = df.groupby('ID')
-
-    # Step 2: Sort by Date
-    sorted_data = {id: data.sort_values('DATE') for id, data in grouped_data}
-
-    # Step 3: Padding Sequences
-    input_seq = 10  # Length of input sequence
-    output_seq = 5  # Length of output sequence
-    padding_step = 2  # Padding step for overlapping sequences
+    grouped_data = ts_df.groupby('ID_STRING')
+    sorted_data = {id: data for id, data in grouped_data}
 
     padded_sequences = {}
+    padded_dates = {}
     for id, data in sorted_data.items():
-        sequences = [data['QTY'].values[i: i + input_seq + output_seq]
-                    for i in range(0, len(data) - input_seq - output_seq + 1, padding_step)]
-        padded_sequences[id] = pad_sequences(sequences)
+        sequences = [data['QTD_ITEM'].values[i: i + input_seq + output_seq] for i in range(0, len(data) - input_seq - output_seq + 1, padding_step)]
+        dates = [data['DATE_STRING'].values[i: i + input_seq + output_seq] for i in range(0, len(data) - input_seq - output_seq + 1, padding_step)]
+        padded_sequences[id] = sequences
+        padded_dates[id] = dates
 
-    # Step 4: Train-Validation Split
     train_ratio = 0.8
     train_sequences, val_sequences = {}, {}
+    train_dates, val_dates = {}, {}
     for id, padded_seq in padded_sequences.items():
         train_seq, val_seq = train_test_split(padded_seq, train_size=train_ratio, shuffle=False)
         train_sequences[id] = train_seq
         val_sequences[id] = val_seq
+    for id, padded_date in padded_dates.items():
+        train_date, val_date = train_test_split(padded_date, train_size=train_ratio, shuffle=False)
+        train_dates[id] = train_date
+        val_dates[id] = val_date
 
-    # Step 5: Create X_train, Y_train, X_val, Y_val
     X_train, Y_train, X_val, Y_val = [], [], [], []
     for id in padded_sequences.keys():
-        X_train.extend(train_sequences[id][:, :input_seq])
-        Y_train.extend(train_sequences[id][:, input_seq:])
-        X_val.extend(val_sequences[id][:, :input_seq])
-        Y_val.extend(val_sequences[id][:, input_seq:])
+        X_train.extend(np.array(train_sequences[id])[:, :input_seq])
+        Y_train.extend(np.array(train_sequences[id])[:, input_seq:])
+        X_val.extend(np.array(val_sequences[id])[:, :input_seq])
+        Y_val.extend(np.array(val_sequences[id])[:, input_seq:])
+    
+    X_dates_train, X_dates_val = [], []
+    for id in padded_dates.keys():
+        X_dates_train.extend(np.array(train_dates[id])[:, :input_seq])
+        X_dates_val.extend(np.array(val_dates[id])[:, :input_seq])
+    
+    X_train = np.array(X_train)
+    Y_train = np.array(Y_train)
+    X_val = np.array(X_val)
+    Y_val = np.array(Y_val)
+    X_dates_train = np.array(X_dates_train)
+    X_dates_val = np.array(X_dates_val)
 
-
+    return X_train, Y_train, X_val, Y_val, X_dates_train, X_dates_val, id_vectorizer, date_vectorizer
 
 def get_vectorizer(corpus, max_size):
     vectorizer = tf.keras.layers.TextVectorization(
@@ -112,7 +123,7 @@ def generate_date_description(date):
 
 def load_data():
     try:
-        ts_df = pd.read_pickle('pickle/ts_df.pkl')
+        ts_df = pd.read_pickle('ts_df.pkl')
     except:
         _, con = setup_connection(cfg.dw_path)
         query = text("""
@@ -190,17 +201,13 @@ def load_data():
             pd.date_range(df.index.levels[1].min(), df.index.levels[1].max(), freq="MS")], 
             names=['ID_STRING', 'DAT_FATO'])
         new_df = pd.DataFrame(index=idx).reset_index()
-        merged_df = pd.merge(new_df, df, how='left', left_on=['ID_STRING', 'DAT_FATO'], right_index=True)
-        merged_df.sort_values(['DAT_FATO', 'ID_STRING'], inplace=True)
-        merged_df['QTD_ITEM'].fillna(0.0, inplace=True)
-        merged_df.reset_index(drop=True, inplace=True)
-        merged_df['DATE_STRING'] = merged_df['DAT_FATO'].apply(generate_date_description)
-        merged_df.drop(['DAT_FATO'], axis=1, inplace=True)
-        ts_df = merged_df.pivot(index='ID_STRING', columns='DATE_STRING', values='QTD_ITEM')
-        ts_df = ts_df.reset_index()
-        ts_df = ts_df.melt(id_vars='ID_STRING', var_name='DATE_STRING', value_name='QTD_ITEM')
-        ts_df.fillna(0.0, inplace=True)
-        ts_df.to_pickle('pickle/ts_df.pkl')
+        ts_df = pd.merge(new_df, df, how='left', left_on=['ID_STRING', 'DAT_FATO'], right_index=True)
+        ts_df.sort_values(['ID_STRING', 'DAT_FATO'], inplace=True)
+        ts_df['QTD_ITEM'].fillna(0.0, inplace=True)
+        ts_df.reset_index(drop=True, inplace=True)
+        ts_df['DATE_STRING'] = ts_df['DAT_FATO'].apply(generate_date_description)
+        ts_df.to_pickle('ts_df.pkl')
+        con.close()
     return ts_df
 
 load_data()
