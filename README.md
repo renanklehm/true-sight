@@ -1,8 +1,8 @@
-# TrueSight
+# TrueSight ✨
 
-The TrueSight model is a hybrid forecasting tool that uses an ensemble of statistical forecasting models as an input for a Deep Neural Network (DNN). The TrueSight preprocessor class is responsible for concatenating the statistical forecasters in an input space, this class accepts forecasters from the packages `statsforecast`, `scikit-learn`, `pmdarima` and any other class that accepts `seasonal_lenght` as a paramater for the constructor and have a method `.fit(x, y)`. 
+The TrueSight model is a super cool hybrid forecasting tool that uses a bunch of statistical forecasting models together with a Deep Neural Network (DNN) to make predictions. 📈🤖 The TrueSight preprocessor class is responsible for getting all the statistical forecasters in one place. It can handle forecasters from packages like `statsforecast`, `scikit-learn`, `pmdarima`, and others. You just need a class that accepts the `seasonal_length` parameter for the constructor and has a `.fit(x, y)` method. Easy peasy! 😎
 
-## Instalation
+## Instalation 💻
 
 To install the TrueSight package, just run:
 
@@ -10,13 +10,13 @@ To install the TrueSight package, just run:
 pip install truesight
 ```
 
-It is also recommended to use the `statsforecast` package for the statistical forecasters
+We also recommend installing the `statsforecast` package for the statistical forecasters:
 
 ```
 pip install statsforecast
 ```
 
-## Usage
+## Usage 🚀
 
 Import the necessary modules
 
@@ -36,14 +36,13 @@ seasonal_lenght = 12
 forecast_horizon = 12
 df = generate_syntetic_data(num_time_steps, seasonal_lenght, 100)
 ```
-
-Create and run the preprocessor class. This class takes a dataframe with the columns the following columns as parameter:
+Create and run the preprocessor class. This class takes a dataframe with the following columns as a parameter:
 
  - unique_id: A string that uniquely identifies each time series in the dataframe
  - ds: A datetime column with the date of each time step. The dates must be in the correct frequency for the date_freq parameter
  - y: The values of the time series
 
-You can include as many statistical models as needed in the model's parameter as long as it follows the statsforecast-like syntax. However, more models would result in a longer processing time. It is essential to set a fallback_model in case any of the informed models fail to fit.
+You can include as many statistical models as you need in the `models` parameter. Just make sure they follow the syntax similar to `statsforecast`. However, keep in mind that more models mean longer processing time. It's important to set a fallback model in case any of the informed models fail to fit.
 
 ``` python
 from statsforecast.models import SeasonalNaive, AutoETS
