@@ -87,14 +87,28 @@ callbacks = [
     tf.keras.callbacks.EarlyStopping(patience = 100, restore_best_weights = True, monitor = "val_loss"),
     tf.keras.callbacks.ReduceLROnPlateau(monitor = "val_loss", factor = 0.5, patience = 25, verbose = 1),
 ]
-truesight.fit(X_train, Y_train, X_val, Y_val, batch_size = 128, epochs = 1000, verbose = False, callbacks = callbacks)
+truesight.fit(
+    X_train, Y_train, 
+    X_val, Y_val, 
+    batch_size = 128, 
+    epochs = 1000, 
+    verbose = False, 
+    callbacks = callbacks,
+ )
 truesight.plot_history()
 ```
 
 Evaluate the results
 
 ``` python
-Y_hat = truesight.predict(X_val, batch_size = 500, n_repeats = 100, n_quantiles = 15, return_quantiles = True, verbose = False)
+Y_hat = truesight.predict(
+    X_val, 
+    batch_size = 500, 
+    n_repeats = 100, 
+    n_quantiles = 15, 
+    return_quantiles = True, 
+    verbose = False,
+ )
 evaluator = Evaluator(X_val, Y_val, Y_hat, ids_val)
 evaluator.evaluate_prediction([smape, mape, mse, rmse, mae], return_mean=False)
 ```
