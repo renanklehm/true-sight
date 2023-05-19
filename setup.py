@@ -3,9 +3,6 @@ from distutils.core import setup
 with open('README.md', 'r', encoding='utf-8') as f:
     long_description = f.read()
 
-with open('requirements.txt', 'r', encoding='utf-8') as f:
-    requirements = f.readlines()
-
 setup(
     name = 'truesight',
     packages = ['truesight'],
@@ -19,5 +16,13 @@ setup(
     classifiers = [],
     long_description=long_description,
     long_description_content_type='text/markdown',
-    install_requires=requirements
+    install_requires=[
+        'tensorflow>=2.11.0',
+        'optuna>=2.10.1',
+        'numpy>=1.23.5',
+        'pandas>=1.5.3',
+        'matplotlib>=3.6.3',
+        'scipy>=1.10.0',
+        'tqdm>=4.64.1',
+    ]
 )
