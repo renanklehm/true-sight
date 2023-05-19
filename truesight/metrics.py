@@ -123,12 +123,7 @@ class Evaluator:
 
         _, ax = plt.subplots(figsize=(10, 6), dpi=100)
         ax.plot(range_output, ytrue, ".-", color = "darkslategray", label = "True data")
-
-        for i in range(len(self.x)):
-            if (self.x[i].shape[1] == range_input.shape[0]):
-                ax.plot(range_input, np.squeeze(self.x[i][idx]), label = "Input", color = "darkslategray", alpha = 0.5)
-            else:
-                ax.plot(range_output, np.squeeze(self.x[i][idx]), label = "Statistical Input", alpha = 0.4)
+        ax.plot(range_input, np.squeeze(self.x[-1][idx]), label = "Input", color = "darkslategray", alpha = 0.5)
 
         for i in range(yhat.shape[0] // 2):
             if (i == 0):

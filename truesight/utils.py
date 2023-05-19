@@ -1,17 +1,5 @@
-import os
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-from datetime import datetime
-
-class TimeIt:
-    def __init__(self, label):
-        self.now = datetime.now()
-        self.label = label
-        print(f"{label}...", end = ' ')
-    
-    def get_time(self):
-        print(f"Done in {(datetime.now() - self.now).total_seconds()} s")
 
 def get_input_shapes(X):
     input_shapes = []

@@ -2,7 +2,6 @@ import __future__
 import warnings
 import pandas as pd
 import numpy as np
-from utils import TimeIt
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore", module="statsforecast.arima")
@@ -44,7 +43,10 @@ class Preprocessor():
 
         return X_train, Y_train, ids_train, X_val, Y_val, ids_val, models
 
-    def format_dataset(self, local_df):
+    def format_dataset(
+            self, 
+            local_df: pd.DataFrame
+        ) -> tuple:
         pivot = pd.pivot_table(local_df, index = "unique_id", columns = "ds")
         models = np.unique(pivot.columns.get_level_values(0))
         x = []
