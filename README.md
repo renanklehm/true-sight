@@ -20,7 +20,7 @@ pip install statsforecast
 
 Import the necessary modules
 
-```
+``` python
 import tensorflow as tf
 from truesight.preprocessing import Preprocessor
 from truesight.core import TrueSight
@@ -30,7 +30,7 @@ from truesight.utils import get_input_shapes, generate_syntetic_data
 
 Load the data
 
-```
+``` python
 num_time_steps = 60
 seasonal_lenght = 12
 forecast_horizon = 12
@@ -45,7 +45,7 @@ Create and run the preprocessor class. This class takes a dataframe with the col
 
 You can include as many statistical models as needed in the model's parameter as long as it follows the statsforecast-like syntax. However, more models would result in a longer processing time. It is essential to set a fallback_model in case any of the informed models fail to fit.
 
-```
+``` python
 from statsforecast.models import SeasonalNaive, AutoETS
 from truesight.models import AdditiveDecomposition
 
@@ -62,7 +62,7 @@ X_train, Y_train, ids_train, X_val, Y_val, ids_val, models = preprocessor.make_d
 
 Create the model and auto tune the hyperparameters
 
-```
+``` python
 input_shapes = get_input_shapes(X_train)
 truesight = TrueSight(models, input_shapes, forecast_horizon = forecast_horizon)
 truesight.auto_tune(X_train, Y_train, X_val, Y_val, n_trials = 50, batch_size = 512, epochs = 5)
@@ -70,7 +70,7 @@ truesight.auto_tune(X_train, Y_train, X_val, Y_val, n_trials = 50, batch_size = 
 
 Train the model, as the model is built on the tensorflow framework, any tensorflow callback can be used
 
-```
+``` python
 callbacks = [
     tf.keras.callbacks.EarlyStopping(patience = 100, restore_best_weights = True, monitor = "val_loss"),
     tf.keras.callbacks.ReduceLROnPlateau(monitor = "val_loss", factor = 0.5, patience = 25, verbose = 1),
@@ -81,7 +81,7 @@ truesight.plot_history()
 
 Evaluate the results
 
-```
+``` python
 Y_hat = truesight.predict(X_val, batch_size = 500, n_repeats = 100, n_quantiles = 15, return_quantiles = True, verbose = False)
 evaluator = Evaluator(X_val, Y_val, Y_hat, ids_val)
 evaluator.evaluate_prediction([smape, mape, mse, rmse, mae], return_mean=False)
@@ -108,6 +108,6 @@ evaluator.evaluate_prediction([smape, mape, mse, rmse, mae], return_mean=False)
 | 89 | 1         | 1        |     2.97768 |   1.72559 |   1.72126 |
 | 94 | 0.991944  | 1.0536   |  1161.46    |  34.0802  |  32.8616  |
 | 96 | 0.974951  | 1.01789  |  5579.17    |  74.6939  |  49.9138  |
-```
+``` python
 evaluator.plot_exemple()
 ```
