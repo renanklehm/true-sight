@@ -60,12 +60,24 @@ X_train, Y_train, ids_train, X_val, Y_val, ids_val, models = preprocessor.make_d
     )
 ```
 
-Create the model and auto tune the hyperparameters
+Create the model
 
 ``` python
 input_shapes = get_input_shapes(X_train)
 truesight = TrueSight(models, input_shapes, forecast_horizon = forecast_horizon)
 truesight.auto_tune(X_train, Y_train, X_val, Y_val, n_trials = 50, batch_size = 512, epochs = 5)
+```
+
+Use the `auto_tune` to automatically define the hyperparameters
+
+``` python
+truesight.auto_tune(X_train, Y_train, X_val, Y_val, n_trials = 10, batch_size = 512, epochs = 5)
+```
+
+Or set then manually
+
+``` python
+truesight.set_hparams(lstm_units=256, hidden_size=1024, num_heads=8, dropout_rate=0.1)
 ```
 
 Train the model, as the model is built on the tensorflow framework, any tensorflow callback can be used
