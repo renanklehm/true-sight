@@ -6,7 +6,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 setup(
     name = 'truesight',
     packages = ['truesight'],
-    version = 'v0.0.2a0',
+    version = 'v0.0.2a2',
     description = 'Truesight is a python package for time series prediction using deep learning and statistical models.',
     author = 'Renan Otvin Klehm',
     author_email = 'renanotivin@hotmail.com',
