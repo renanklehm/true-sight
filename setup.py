@@ -3,6 +3,9 @@ from distutils.core import setup
 with open('README.md', 'r', encoding='utf-8') as f:
     long_description = f.read()
 
+with open('requirements.txt', 'r', encoding='utf-8') as f:
+    requirements = f.readlines()
+
 setup(
     name = 'truesight',
     packages = ['truesight'],
@@ -15,5 +18,6 @@ setup(
     keywords = ['time series', 'prediction'],
     classifiers = [],
     long_description=long_description,
-    long_description_content_type='text/markdown'
+    long_description_content_type='text/markdown',
+    install_requires=requirements
 )
