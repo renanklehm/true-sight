@@ -3,19 +3,18 @@ import warnings
 import pandas as pd
 import numpy as np
 from utils import TimeIt
+from tqdm import tqdm
 
 warnings.filterwarnings("ignore", module="statsforecast.arima")
 class Preprocessor():
 
     def __init__(
             self, 
-            df: pd.DataFrame,
-            verbose: bool = True
+            df: pd.DataFrame
         ) -> None:
         self.df = df.copy()
         self.df = self.df.sort_values("ds")
         self.df = self.df.reset_index(drop = True)
-        self.verbose = verbose
     
     def make_dataset(
             self,
@@ -24,7 +23,8 @@ class Preprocessor():
             date_freq: str = "MS",
             train_split: float = 0.8,
             models: list = [],
-            fallback_model = None
+            fallback_model = None,
+            verbose: bool = True
         ) -> tuple:
 
         self.forecast_horizon = forecast_horizon
@@ -35,8 +35,8 @@ class Preprocessor():
         self.train_df = self.df[self.df.unique_id.isin(training_ids)]
         self.val_df = self.df[~self.df.unique_id.isin(training_ids)]
         dates = self.df['ds'].sort_values().unique()
-        train_forecast_df = self.get_statistical_forecast(self.train_df[self.train_df['ds'].isin(dates[:-self.forecast_horizon])], models, fallback_model)
-        val_forecast_df = self.get_statistical_forecast(self.val_df[self.val_df['ds'].isin(dates[:-self.forecast_horizon])], models, fallback_model)
+        train_forecast_df = self.get_statistical_forecast(self.train_df[self.train_df['ds'].isin(dates[:-self.forecast_horizon])], models, fallback_model, verbose = verbose)
+        val_forecast_df = self.get_statistical_forecast(self.val_df[self.val_df['ds'].isin(dates[:-self.forecast_horizon])], models, fallback_model, verbose = verbose)
         self.train_df = pd.merge(self.train_df, train_forecast_df, on = ["unique_id", "ds"], how = "left")
         self.val_df = pd.merge(self.val_df, val_forecast_df, on = ["unique_id", "ds"], how = "left")
         X_train, Y_train, ids_train, models = self.format_dataset(self.train_df)
@@ -61,12 +61,12 @@ class Preprocessor():
             self, 
             local_df: pd.DataFrame, 
             models: list = [], 
-            fallback_model = None
+            fallback_model = None,
+            verbose: bool = True
         ) -> pd.DataFrame:
         groups = local_df.groupby("unique_id")
         return_df = []
-        for i, (unique_id, group) in enumerate(groups):
-            if (self.verbose): t = TimeIt(f"{i}/{len(groups)} - {unique_id}")
+        for unique_id, group in tqdm(groups, total = len(groups), disable = not verbose):
             output_dates = pd.date_range(group.ds.max(), periods = self.forecast_horizon + 1, freq = self.date_freq)[1:]
             output_ids = [unique_id] * len(output_dates)
             for model in models:
@@ -84,7 +84,6 @@ class Preprocessor():
                     "ds": output_dates,
                     model.__repr__(): model.predict(self.forecast_horizon)['mean'],
                 }))
-            if (self.verbose): t.get_time()
         return_df = pd.concat(return_df)
         return_df = return_df.groupby(['unique_id', 'ds'], as_index = False).sum()
         return return_df

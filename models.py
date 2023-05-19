@@ -174,11 +174,12 @@ class TrueSight:
             models: list,
             input_shape: list, 
             forecast_horizon: int,
-            folder_path: str = "best_model"
         ) -> None:
+        self.model_folder = 'best_model'
+        self.hparams_folder = './hparams'
+        os.makedirs(self.hparams_folder, exist_ok=True)
         self.input_shape = input_shape
         self.forecast_horizon = forecast_horizon
-        self.folder_path = folder_path
         self.models = models
         self.set_hparams()
         self.model = self.get_model(self.hparams)
@@ -193,7 +194,7 @@ class TrueSight:
         for i in range(len(self.models)):
             x_inputs.append(tf.keras.layers.Input((self.input_shape[i], 1), name = f"input_{i}"))
             x.append(x_inputs[i])
-            x[i] = tf.keras.layers.LayerNormalization()(x[i])
+            x[i] = tf.keras.layers.LayerNormalization(epsilon=1e-8)(x[i])
             x[i] = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name=f"dense_input_{i}")(x[i])
             x[i] = tf.keras.layers.Dropout(hparams['dropout_rate'], name=f"dropout_{i}")(x[i], training = True)
             x[i] = tf.keras.layers.Conv1D(hparams['num_filters'], kernel_size=hparams['kernel_size'], activation='selu', padding='same', name=f"conv1d_{i}_1")(x[i])
@@ -206,7 +207,6 @@ class TrueSight:
             x[i] = tf.keras.layers.Flatten(name=f"flatten_{i}")(x[i])
             x_outputs.append(x[i])
         y = tf.keras.layers.Concatenate(name="concatenate")(x_outputs)
-        y = tf.keras.layers.Masking()(y)
         y = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name="dense_output")(y)
         y = tf.keras.layers.Dropout(hparams['dropout_rate'], name="dropout_output")(y, training = True)
         y = tf.keras.layers.Dense(self.forecast_horizon, activation='selu', name="output_dense")(y)
@@ -236,11 +236,34 @@ class TrueSight:
             callbacks = callbacks,
             verbose = verbose
             )
-        if save_best_model: self.model.save(self.folder_path)
+        if save_best_model: self.model.save(self.model_folder)
+
+    def predict(
+            self,
+            X: list,
+            n_repeats: int = 1,
+            batch_size: int = 128,
+            n_quantiles: int = 10,
+            return_quantiles: bool = False,
+            verbose: bool = True
+        ) -> np.ndarray:
+
+        yhat = []
+        for i in range(n_repeats):
+            yhat.append(self.model.predict(X, batch_size=batch_size, verbose=verbose))
+        yhat = np.array(yhat)
+
+        if return_quantiles: yhat = np.quantile(yhat, np.linspace(0, 1, n_quantiles), axis=0)
+        else: yhat = np.mean(yhat, axis=0)
+        return yhat
 
     def load_model(self):
-        if not os.path.exists(self.folder_path): raise Exception("No model found")
-        self.model = tf.keras.models.load_model(self.folder_path)
+        if not os.path.exists(self.model_folder): raise Exception("No model found")
+        self.model = tf.keras.models.load_model(self.model_folder)
+    
+    def load_hparams(self):
+        if not os.path.exists(f'{self.hparams_folder}/best_hparams.json'): raise Exception("No best hparams found, please run the auto_tune() first")
+        with open(f'{self.hparams_folder}/best_hparams.json', 'r') as file: self.hparams = json.load(file)
 
     def set_hparams(
             self,
@@ -284,18 +307,20 @@ class TrueSight:
             'dropout_rate': dropout_rate,
         }
 
-        model = self.get_model(self.X_train, self.forecast_horizon, hparams)
-        model.fit(self.X_train, self.Y_train, epochs = self.epochs, batch_size = self.batch_size)
-        score = model.evaluate(self.X_val, self.Y_val, verbose=1, batch_size = self.batch_size)
-        with open(f'/hparams/{datetime.now().strftime("%Y%m%d-%H%M%S")}-score:{score}.json', 'w') as file: json.dump(hparams, file)
+        model = self.get_model(hparams)
+        model.fit(self.X_train, self.Y_train, epochs = self.epochs, batch_size = self.batch_size, verbose = 0)
+        score = model.evaluate(self.X_val, self.Y_val, batch_size = self.batch_size, verbose = 0)
+        score = np.array(score).mean()
+        with open(f'{self.hparams_folder}/{datetime.now().strftime("%Y%m%d%H%M%S")}-{score}.json', 'w') as file: json.dump(hparams, file)
         return score
 
-    def find_hparams(
+    def auto_tune(
             self,
             X_train: list,
             Y_train: np.ndarray,
             X_val: list,
             Y_val: np.ndarray,
+            n_trials: int,
             batch_size: int = 128,
             epochs: int = 5,
             min_num_filters: int = 32,
@@ -339,11 +364,17 @@ class TrueSight:
         self.min_dropout_rate = min_dropout_rate
         self.max_dropout_rate = max_dropout_rate
         
-        os.makedirs('/hparams', exist_ok=True)
+        file_list = os.listdir(self.hparams_folder)
+        for file_name in file_list:
+            file_path = os.path.join(self.hparams_folder, file_name)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+
         study = optuna.create_study(direction="minimize")
-        study.optimize(self.objective, n_trials=100)
-        with open(f'/hparams/best_hparams.json', 'w') as file: json.dump(study.best_trial.params.items(), file)
-        return study.best_trial.params.items()
+        study.optimize(self.objective, n_trials=n_trials)
+        self.hparams = study.best_trial.params
+        with open(f'{self.hparams_folder}/best_hparams.json', 'w') as file: json.dump(self.hparams, file)
+        return self.hparams
 
     def plot_history(self):
         if not hasattr(self, 'history'): raise Exception('No history found. Please train the model first.')

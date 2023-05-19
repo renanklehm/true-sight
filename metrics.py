@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
-    
+import matplotlib.pyplot as plt
+
+np.seterr(divide='ignore')
+
 def bias(
         y_true: np.ndarray, 
         y_pred: np.ndarray,  
@@ -24,19 +27,6 @@ def mae(
         return np.mean(mae)
     else:
         return np.mean(mae, axis = axis)  
-
-def mase(
-        y_true: np.ndarray, 
-        y_pred: np.ndarray,  
-        axis: int = -1, 
-        return_mean: bool = False
-    ) -> np.ndarray:
-    mase = abs(y_true - y_pred)
-    mase = mase / mae(y_true, y_pred)
-    if (return_mean):
-        return np.mean(mase)
-    else:
-        return np.mean(mase, axis = axis)
 
 def smape(
         y_true: np.ndarray, 
@@ -93,16 +83,62 @@ def rmse(
         return np.sqrt(np.mean(rmse))
     else:
         return np.sqrt(np.mean(rmse, axis = axis))
-    
-def evaluate_prediction(base_df, evaluators = None):
-    pivot = pd.pivot_table(base_df.dropna(), index = "unique_id", columns = "ds")
-    models = np.unique(pivot.columns.get_level_values(0))
-    models = np.delete(models, np.where(models == "y"))
-    y_true = pivot.loc[:,"y"].to_numpy()
-    predictions = {}
-    for model in models:
-        evals = []
-        for eval in evaluators:
-            evals.append(eval(y_true, pivot.loc[:,model].to_numpy()))
-        predictions[model] = evals
-    return pd.DataFrame(predictions, [a.__name__ for a in evaluators])
+
+class Evaluator:
+    def __init__(
+            self,
+            x: np.ndarray,
+            y_true: np.ndarray,
+            y_pred: np.ndarray,
+            ids: np.ndarray):
+        self.x = x
+        self.y_true = y_true
+        self.y_pred = y_pred
+        self.ids = ids
+
+    def evaluate_prediction(
+            self,
+            evaluators: list = [],
+            return_mean: bool = False
+        ):
+        df_list = []
+        for i, id in enumerate(self.ids):
+            df = {}
+            for evaluator in evaluators:
+                df[evaluator.__name__] = evaluator(self.y_true[i], self.y_pred.mean(axis=0)[i], return_mean = True)
+            df_list.append(pd.DataFrame(df, index = [id]))
+        if (return_mean):
+            return pd.concat(df_list).mean()
+        else:
+            return pd.concat(df_list)
+
+    def plot_exemple(self):
+        idx = np.random.randint(0, len(self.y_true))
+
+        ytrue = np.squeeze(self.y_true[idx])
+        yhat = np.squeeze(self.y_pred.mean(axis=0)[idx])
+
+        range_input = np.arange(0, self.x[-1].shape[1])
+        range_output = np.arange(self.x[-1].shape[1], len(ytrue) + self.x[-1].shape[1])
+
+        _, ax = plt.subplots(figsize=(10, 6), dpi=100)
+        ax.plot(range_output, ytrue, ".-", color = "darkslategray", label = "True data")
+
+        for i in range(len(self.x)):
+            if (self.x[i].shape[1] == range_input.shape[0]):
+                ax.plot(range_input, np.squeeze(self.x[i][idx]), label = "Input", color = "darkslategray", alpha = 0.5)
+            else:
+                ax.plot(range_output, np.squeeze(self.x[i][idx]), label = "Statistical Input", alpha = 0.4)
+
+        for i in range(yhat.shape[0] // 2):
+            if (i == 0):
+                ax.fill_between(range_output, np.squeeze(self.y_pred[-i-1,idx]), np.squeeze(self.y_pred[i,idx]), alpha = 0.3 / (self.y_pred.shape[0] / 2), color = "brown")
+            else:
+                ax.fill_between(range_output, np.squeeze(self.y_pred[-i-1,idx]), np.squeeze(self.y_pred[i,idx]), alpha = 0.3 / (self.y_pred.shape[0] / 2), color = "brown")
+        ax.plot(range_output, yhat, "v-", label = "TrueSight Prediction", color = "brown")
+        ax.axvline(x = range_output[0], linestyle = "--", color = 'crimson', label = 'Training Data')
+        ax.set_ylim(0)
+
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
