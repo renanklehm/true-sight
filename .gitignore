@@ -2,6 +2,7 @@
 pickle/*
 best_model*
 hparams*
+*.ipynb
 *.pkl
 *.csv
 *.h5
