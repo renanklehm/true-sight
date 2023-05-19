@@ -97,7 +97,7 @@ truesight.fit(
  )
 truesight.plot_history()
 ```
-![Training Log](figures\training_history.png)
+![Training Log](figures/training_history.png)
 
 
 Evaluate the results
@@ -140,4 +140,4 @@ evaluator.evaluate_prediction([smape, mape, mse, rmse, mae], return_mean=False)
 ``` python
 evaluator.plot_exemple()
 ```
-![Output Exemple](figures\output.png)
+![Output Exemple](figures/output.png)
