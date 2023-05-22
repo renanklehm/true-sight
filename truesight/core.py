@@ -68,6 +68,7 @@ class TrueSight:
             save_best_model: bool = True,
             verbose: bool = True
         ):
+
         self.history = self.model.fit(
             x = X_train,
             y = Y_train,
@@ -77,6 +78,7 @@ class TrueSight:
             callbacks = callbacks,
             verbose = verbose
             )
+        
         if save_best_model: self.model.save(self.model_folder)
 
     def predict(
