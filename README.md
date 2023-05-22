@@ -1,6 +1,6 @@
 # TrueSight ✨
 
-The TrueSight model is a hybrid forecasting tool that uses statistical forecasting models together with a Deep Neural Network (DNN) to make predictions. The TrueSight `Preprocessor` class is responsible for getting all the statistical forecasters in one place. It can handle forecasters from packages like `statsforecast`, `scikit-learn`, `pmdarima`, and others. You just need a class that accepts the `seasonal_length` parameter for the constructor and has a `.fit(x, y)` method
+The TrueSight model is a hybrid forecasting tool that uses statistical forecasting models together with a Deep Neural Network (DNN) to make predictions. The TrueSight `Preprocessor` class is responsible for getting all the statistical forecasters in one place. It can handle forecasters from packages like `statsforecast`, `scikit-learn`, `pmdarima`, and others. You just need to the `ModelWrapper` Class to standardize the method calls.
 
 All you need to do before using this package, is create a pandas dataframe with the following structure:
 
@@ -40,23 +40,32 @@ Load the data
 
 ``` python
 num_time_steps = 60
-seasonal_lenght = 12
+season_length = 12
 forecast_horizon = 12
-df = generate_syntetic_data(num_time_steps, seasonal_lenght, 100)
+df = generate_syntetic_data(num_time_steps, season_length, 100)
 ```
-Create and run the preprocessor class. You can include as many statistical models as you need in the `models` parameter. Just make sure they follow the syntax similar to `statsforecast`. However, keep in mind that more models mean longer processing time. It's important to set a fallback model in case any of the informed models fail to fit.
+Create and run the preprocessor class. You can include as many statistical models as you need in the `models` parameter, just make sure to use the `ModelWrapper` class. However, keep in mind that more models mean longer processing time. It's important to set a fallback model in case any of the informed models fail to fit.
 
 ``` python
 from statsforecast.models import SeasonalNaive, AutoETS
+from sklearn.linear_model import LinearRegression
 from truesight.models import AdditiveDecomposition
+from truesight.utils import ModelWrapper
+
+models = [
+    ModelWrapper(LinearRegression, horizon=forecast_horizon, season_length=season_length), 
+    ModelWrapper(SeasonalNaive, horizon=forecast_horizon, season_length=season_length), 
+    ModelWrapper(AutoETS, horizon=forecast_horizon, season_length=season_length),
+    ModelWrapper(AdditiveDecomposition, horizon=forecast_horizon, season_length=season_length)
+]
 
 preprocessor = Preprocessor(df)
 X_train, Y_train, ids_train, X_val, Y_val, ids_val, models = preprocessor.make_dataset(
-    forecast_horizon = forecast_horizon, 
-    season_length = seasonal_lenght,
+    forecast_horizon = 12, 
+    season_length = 12,
     date_freq = "MS", 
-    models = [AdditiveDecomposition, AutoETS, SeasonalNaive], 
-    fallback_model = SeasonalNaive,
+    models = models, 
+    fallback_model = ModelWrapper(SeasonalNaive, horizon=forecast_horizon, season_length=season_length),
     verbose = True
     )
 ```
