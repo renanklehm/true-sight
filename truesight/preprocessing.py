@@ -73,7 +73,6 @@ class Preprocessor():
             output_ids = [unique_id] * len(output_dates)
             for model in models:
                 try:
-                    model = model(season_length = self.season_length)
                     model.fit(group['y'].to_numpy())
                 except:
                     if fallback_model is not None:
@@ -84,7 +83,7 @@ class Preprocessor():
                 return_df.append(pd.DataFrame({
                     "unique_id": output_ids,
                     "ds": output_dates,
-                    model.__repr__(): model.predict(self.forecast_horizon)['mean'],
+                    model.__repr__(): model.predict(),
                 }))
         return_df = pd.concat(return_df)
         return_df = return_df.groupby(['unique_id', 'ds'], as_index = False).sum()
