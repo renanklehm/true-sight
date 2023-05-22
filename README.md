@@ -52,8 +52,8 @@ from truesight.models import AdditiveDecomposition
 
 preprocessor = Preprocessor(df)
 X_train, Y_train, ids_train, X_val, Y_val, ids_val, models = preprocessor.make_dataset(
-    forecast_horizon = 12, 
-    season_length = 12,
+    forecast_horizon = forecast_horizon, 
+    season_length = seasonal_lenght,
     date_freq = "MS", 
     models = [AdditiveDecomposition, AutoETS, SeasonalNaive], 
     fallback_model = SeasonalNaive,
