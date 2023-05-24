@@ -5,6 +5,7 @@ import json
 import optuna
 import numpy as np
 import tensorflow as tf
+import tensorflow_models as tfm
 import matplotlib.pyplot as plt
 from datetime import datetime
 from truesight.preprocessing import Preprocessor
@@ -38,24 +39,20 @@ class TrueSight:
             x[i] = tf.keras.layers.LayerNormalization(epsilon=1e-8)(x[i])
             x[i] = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name=f"dense_input_{i}")(x[i])
             x[i] = tf.keras.layers.Dropout(hparams['dropout_rate'], name=f"dropout_{i}")(x[i], training = True)
-            x[i] = tf.keras.layers.Conv1D(hparams['num_filters'], kernel_size=hparams['kernel_size'], activation='selu', padding='same', name=f"conv1d_{i}_1")(x[i])
-            x[i] = tf.keras.layers.MaxPooling1D(pool_size=2, padding='same', name=f"max_pool_{i}_1")(x[i])
-            x[i] = tf.keras.layers.Conv1D(hparams['num_filters'], kernel_size=hparams['kernel_size'], activation='selu', padding='same', name=f"conv1d_{i}_2")(x[i])
-            x[i] = tf.keras.layers.MaxPooling1D(pool_size=2, padding='same', name=f"max_pool_{i}_2")(x[i])
             x[i] = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hparams['lstm_units'], return_sequences=True), name=f"bidirectional_lstm_{i}")(x[i])
             x[i] = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(hparams['hidden_size'], activation='selu'), name=f"timedistributed_dense_{i}")(x[i])
-            x[i] = tf.keras.layers.MultiHeadAttention(hparams['num_heads'], hparams['key_dim'], name = f"multihead_self_attention_{i}")(x[i], x[i])
             x[i] = tf.keras.layers.Flatten(name=f"flatten_{i}")(x[i])
             x[i] = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name=f"dense_output_{i}")(x[i])
             x_outputs.append(x[i])
             
-        x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[-1],), name = "nlp_input"))
+        x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[-1],), name = "transformer_input"))
         x.append(x_inputs[-1])
-        inputs = tf.keras.layers.Input(shape=input_shape)
-        x = inputs
-        x = tfm.nlp.layers.TransformerEncoderBlock(64, 128)(x)
-        x = tfm.nlp.layers.TransformerDecoderBlock(64, 128)(x)
-        outputs = tf.keras.layers.Dense(output_shape, activation='softmax')(x)
+        x[-1] = tf.keras.layers.Embedding(self.preprocessor.vectorizer.vocabulary_size, hparams['embedding_dim'], name=f"embedding")(x[-1])
+        x[-1] = tf.keras.layers.Dropout(hparams['dropout_rate'], name=f"dropout_embedding")(x[-1], training = True)
+        x[-1] = tfm.nlp.layers.TransformerEncoderBlock(hparams['num_heads'], hparams['key_dim'], hparams['hidden_size'], name=f"transformer_encoder")(x[-1])
+        x[-1] = tfm.nlp.layers.TransformerDecoderBlock(hparams['num_heads'], hparams['key_dim'], hparams['hidden_size'], name=f"transformer_decoder")(x[-1])
+        x[-1] = tf.keras.layers.Flatten(name=f"flatten_transformer")(x[-1])
+        x[-1] = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name=f"transformer_output")(x[-1])
         x_outputs.append(x[-1])
 
         y = tf.keras.layers.Concatenate(name="concatenate")(x_outputs)
