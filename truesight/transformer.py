@@ -1,47 +1,130 @@
-import logging
-import time
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-import tensorflow_datasets as tfds
 import tensorflow as tf
+from truesight.layers import PositionalEmbedding, EncoderLayer, DecoderLayer
 
-import tensorflow_text
 
+class Transformer(tf.keras.Model):
+    def __init__(
+        self, 
+        *,
+        num_layers: int, 
+        d_model: int, 
+        num_heads: int, 
+        dff: int,
+        input_vocab_size: int, 
+        target_vocab_size: int, 
+        dropout_rate:float = 0.1
+    ) -> None:
+        
+        super().__init__()
+        self._d_model = d_model
+        self.encoder = Encoder(
+            num_layers=num_layers, 
+            d_model=d_model,
+            num_heads=num_heads, 
+            dff=dff,
+            vocab_size=input_vocab_size,
+            dropout_rate=dropout_rate
+        )
+        self.decoder = Decoder(
+            num_layers=num_layers, 
+            d_model=d_model,
+            num_heads=num_heads, 
+            dff=dff,
+            vocab_size=target_vocab_size,
+            dropout_rate=dropout_rate
+        )
+        self.final_layer = tf.keras.layers.Dense(target_vocab_size)
+        self.final_layer.build((None, d_model))
+
+    def call(
+        self, 
+        inputs: tf.Tensor,
+    ) -> tf.Tensor:
+
+        context, x = inputs
+        x = tf.tile(x, [1, 1, self._d_model])
+        context = self.encoder(context)
+        x = self.decoder(x, context)
+        output = self.final_layer(x)
+        output = tf.reduce_mean(output, axis=1)
+        output = tf.expand_dims(output, axis=-1)
+        return output
+
+class Encoder(tf.keras.layers.Layer):
     
-
-
-class PositionalEmbedding(tf.keras.layers.Layer):
-
-    def __init__(self, vocab_size, d_model):
+    def __init__(
+        self, 
+        *, 
+        num_layers: int, 
+        d_model: int, 
+        num_heads: int,
+        dff: int, 
+        vocab_size: int, 
+        dropout_rate:float = 0.1
+    ) -> None:
+        
         super().__init__()
         self.d_model = d_model
-        self.embedding = tf.keras.layers.Embedding(vocab_size, d_model, mask_zero=True) 
-        self.pos_encoding = self.positional_encoding(length=2048, depth=d_model)
+        self.num_layers = num_layers
 
-    def compute_mask(self, *args, **kwargs):
-        return self.embedding.compute_mask(*args, **kwargs)
+        self.pos_embedding = PositionalEmbedding(vocab_size=vocab_size, d_model=d_model)       
+        self.enc_layers = []
+        for _ in range(num_layers):
+            self.enc_layers.append(EncoderLayer(
+                d_model=d_model,
+                num_heads=num_heads,
+                dff=dff,
+                dropout_rate=dropout_rate)
+            )
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)
 
-    def call(self, x):
-        length = tf.shape(x)[1]
-        x = self.embedding(x)
-        # This factor sets the relative scale of the embedding and positonal_encoding.
-        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-        x = x + self.pos_encoding[tf.newaxis, :length, :]
+    def call(
+        self, 
+        x: tf.Tensor
+    ) -> tf.Tensor:
+        
+        x = self.pos_embedding(x)
+        x = self.dropout(x)
+        for i in range(self.num_layers):
+            x = self.enc_layers[i](x)
+
         return x
+
+class Decoder(tf.keras.layers.Layer):
     
-    def positional_encoding(self, length, depth):
-        depth = depth/2
+    def __init__(
+        self, 
+        *, 
+        num_layers: int, 
+        d_model: int, 
+        num_heads: int, 
+        dff: int, 
+        vocab_size: int,
+        dropout_rate:float = 0.1
+    ) -> None:
+        
+        super(Decoder, self).__init__()
+        self.d_model = d_model
+        self.num_layers = num_layers
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)        
+        self.dec_layers = []
+        for _ in range(num_layers):
+            self.dec_layers.append(DecoderLayer(
+                d_model=d_model,
+                num_heads=num_heads,
+                dff=dff,
+                dropout_rate=dropout_rate)
+            )
+        self.last_attn_scores = None
 
-        positions = np.arange(length)[:, np.newaxis]     # (seq, 1)
-        depths = np.arange(depth)[np.newaxis, :]/depth   # (1, depth)
+    def call(
+        self, 
+        x: tf.Tensor, 
+        context: tf.Tensor
+    ) -> tf.Tensor:
 
-        angle_rates = 1 / (10000**depths)         # (1, depth)
-        angle_rads = positions * angle_rates      # (pos, depth)
-
-        pos_encoding = np.concatenate(
-            [np.sin(angle_rads), np.cos(angle_rads)],
-            axis=-1) 
-
-        return tf.cast(pos_encoding, dtype=tf.float32)
+        x = self.dropout(x)
+        for i in range(self.num_layers):
+            x  = self.dec_layers[i](x, context)
+        self.last_attn_scores = self.dec_layers[-1].last_attn_scores
+        return x
