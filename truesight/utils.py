@@ -1,10 +1,10 @@
 import inspect
 import numpy as np
 import pandas as pd
+from datetime import datetime
 from sklearn.base import BaseEstimator
 from truesight.base import StatisticalForecaster
 from statsforecast.models import _TS
-from abc import ABC, abstractmethod
 
 class ModelWrapper:
     def __init__(
@@ -62,12 +62,6 @@ class ModelWrapper:
         
         return self.model.__repr__()
 
-def get_input_shapes(X):
-    input_shapes = []
-    for x in X:
-        input_shapes.append(x.shape[1])
-    return input_shapes
-
 def generate_syntetic_data(
         num_time_steps: int,
         seasonal_lenght: int,
@@ -95,3 +89,17 @@ def generate_syntetic_data(
     for i, ts in enumerate(dataset):
         df.append(pd.DataFrame({"unique_id": np.tile(ids[i], len(ts)), "ds": dates, "y": ts}))
     return pd.concat(df)
+
+class TimeIt:
+    def __init__(self, label, print_start = True):
+        self.now = datetime.now()
+        self.label = label
+        self.print_start = print_start
+        if self.print_start:
+            print(f"{label}...", end = ' ')
+    
+    def get_time(self):
+        if self.print_start:
+            print(f"Done in {(datetime.now() - self.now).total_seconds()} s")
+        else:
+            print(f"{self.label}...Done in {(datetime.now() - self.now).total_seconds()} s")
