@@ -20,9 +20,9 @@ setup(
         'tensorflow>=2.11.0',
         'optuna>=2.10.1',
         'numpy>=1.23.5',
-        'pandas>=1.5.3',
-        'matplotlib>=3.6.3',
-        'scipy>=1.10.0',
-        'tqdm>=4.64.1',
+        'pandas',
+        'matplotlib',
+        'scipy',
+        'tqdm',
     ]
 )
