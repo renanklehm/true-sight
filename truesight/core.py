@@ -7,21 +7,21 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from datetime import datetime
+from truesight.preprocessing import Preprocessor
 
 class TrueSight:
 
     def __init__(
             self,
-            models: list,
-            input_shape: list, 
-            forecast_horizon: int,
+            preprocessor: Preprocessor,
+            model_folder: str = 'best_model',
+            hparams_folder: str = './hparams',
         ) -> None:
-        self.model_folder = 'best_model'
-        self.hparams_folder = './hparams'
+        self.model_folder = model_folder
+        self.hparams_folder = hparams_folder
         os.makedirs(self.hparams_folder, exist_ok=True)
-        self.input_shape = input_shape
-        self.forecast_horizon = forecast_horizon
-        self.models = models
+
+        self.preprocessor = preprocessor
         self.set_hparams()
         self.model = self.get_model(self.hparams)
 
@@ -32,8 +32,8 @@ class TrueSight:
         x_inputs = []
         x_outputs = []
         x = []
-        for i in range(len(self.models)):
-            x_inputs.append(tf.keras.layers.Input((self.input_shape[i], 1), name = f"input_{i}"))
+        for i in range(len(self.preprocessor.models)):
+            x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[i], 1), name = f"input_{i}"))
             x.append(x_inputs[i])
             x[i] = tf.keras.layers.LayerNormalization(epsilon=1e-8)(x[i])
             x[i] = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name=f"dense_input_{i}")(x[i])
@@ -46,22 +46,29 @@ class TrueSight:
             x[i] = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(hparams['hidden_size'], activation='selu'), name=f"timedistributed_dense_{i}")(x[i])
             x[i] = tf.keras.layers.MultiHeadAttention(hparams['num_heads'], hparams['key_dim'], name = f"multihead_self_attention_{i}")(x[i], x[i])
             x[i] = tf.keras.layers.Flatten(name=f"flatten_{i}")(x[i])
+            x[i] = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name=f"dense_output_{i}")(x[i])
             x_outputs.append(x[i])
+            
+        x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[-1],), name = "nlp_input"))
+        x.append(x_inputs[-1])
+        inputs = tf.keras.layers.Input(shape=input_shape)
+        x = inputs
+        x = tfm.nlp.layers.TransformerEncoderBlock(64, 128)(x)
+        x = tfm.nlp.layers.TransformerDecoderBlock(64, 128)(x)
+        outputs = tf.keras.layers.Dense(output_shape, activation='softmax')(x)
+        x_outputs.append(x[-1])
+
         y = tf.keras.layers.Concatenate(name="concatenate")(x_outputs)
         y = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name="dense_output")(y)
         y = tf.keras.layers.Dropout(hparams['dropout_rate'], name="dropout_output")(y, training = True)
-        y = tf.keras.layers.Dense(self.forecast_horizon, activation='selu', name="output_dense")(y)
+        y = tf.keras.layers.Dense(self.preprocessor.forecast_horizon, activation='selu', name="output_dense")(y)
         model = tf.keras.Model(x_inputs, y, name="TrueSight")
         optimizer = tf.keras.optimizers.Adam(learning_rate=hparams['learning_rate'])
         model.compile(optimizer=optimizer, loss='mse')
         return model
     
     def fit(
-            self, 
-            X_train: list, 
-            Y_train: np.ndarray, 
-            X_val: list, 
-            Y_val: np.ndarray, 
+            self,
             batch_size: int = 128, 
             epochs: int = 100, 
             callbacks: list = [],
@@ -70,11 +77,11 @@ class TrueSight:
         ):
 
         self.history = self.model.fit(
-            x = X_train,
-            y = Y_train,
+            x = self.preprocessor.X_train,
+            y = self.preprocessor.Y_train,
             batch_size = batch_size,
             epochs = epochs,
-            validation_data = [X_val, Y_val],
+            validation_data = [self.preprocessor.X_val, self.preprocessor.Y_val],
             callbacks = callbacks,
             verbose = verbose
             )
@@ -110,6 +117,7 @@ class TrueSight:
 
     def set_hparams(
             self,
+            embedding_dim: int = 256,
             num_filters: int = 64,
             kernel_size: int = 3,
             lstm_units: int = 64,
@@ -120,6 +128,7 @@ class TrueSight:
             dropout_rate: float = 0.2,
         ) -> None:
         self.hparams = {
+            'embedding_dim': embedding_dim,
             'num_filters': num_filters,
             'kernel_size': kernel_size,
             'lstm_units': lstm_units,
@@ -131,6 +140,7 @@ class TrueSight:
         }
 
     def objective(self, trial):
+        embedding_dim = trial.suggest_int("embedding_dim", self.min_embedding_dim, self.max_embedding_dim)
         num_filters = trial.suggest_int("num_filters", self.min_num_filters, self.max_num_filters)
         kernel_size = trial.suggest_int("kernel_size", self.min_kernel_size, self.max_kernel_size)
         lstm_units = trial.suggest_int("lstm_units", self.min_lstm_units, self.max_lstm_units)
@@ -140,6 +150,7 @@ class TrueSight:
         dropout_rate = trial.suggest_float("dropout_rate", self.min_dropout_rate, self.max_dropout_rate )
         learning_rate = trial.suggest_float("learning_rate", self.min_learning_rate, self.max_learning_rate)
         hparams = {
+            'embedding_dim': embedding_dim,
             'num_filters': num_filters,
             'kernel_size': kernel_size,
             'lstm_units': lstm_units,
@@ -151,21 +162,19 @@ class TrueSight:
         }
 
         model = self.get_model(hparams)
-        model.fit(self.X_train, self.Y_train, epochs = self.epochs, batch_size = self.batch_size, verbose = 0)
-        score = model.evaluate(self.X_val, self.Y_val, batch_size = self.batch_size, verbose = 0)
+        model.fit(self.preprocessor.X_train, self.preprocessor.Y_train, epochs = self.epochs, batch_size = self.batch_size, verbose = 0)
+        score = model.evaluate(self.preprocessor.X_val, self.preprocessor.Y_val, batch_size = self.batch_size, verbose = 0)
         score = np.array(score).mean()
         with open(f'{self.hparams_folder}/{datetime.now().strftime("%Y%m%d%H%M%S")}-{score}.json', 'w') as file: json.dump(hparams, file)
         return score
 
     def auto_tune(
             self,
-            X_train: list,
-            Y_train: np.ndarray,
-            X_val: list,
-            Y_val: np.ndarray,
             n_trials: int,
             batch_size: int = 128,
             epochs: int = 5,
+            min_embedding_dim: int = 32,
+            max_embedding_dim: int = 512,
             min_num_filters: int = 32,
             max_num_filters: int = 256,
             min_kernel_size: int = 3,
@@ -184,12 +193,10 @@ class TrueSight:
             max_dropout_rate: float = 0.4,
         ) -> dict:
 
-        self.X_train = X_train
-        self.Y_train = Y_train
-        self.X_val = X_val
-        self.Y_val = Y_val
         self.batch_size = batch_size
         self.epochs = epochs
+        self.min_embedding_dim = min_embedding_dim
+        self.max_embedding_dim = max_embedding_dim
         self.min_num_filters = min_num_filters
         self.max_num_filters = max_num_filters
         self.min_kernel_size = min_kernel_size
