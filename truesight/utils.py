@@ -4,7 +4,6 @@ import pandas as pd
 from sklearn.base import BaseEstimator
 from truesight.base import StatisticalForecaster
 from statsforecast.models import _TS
-from abc import ABC, abstractmethod
 
 class ModelWrapper:
     def __init__(
