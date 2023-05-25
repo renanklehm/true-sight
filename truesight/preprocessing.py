@@ -58,12 +58,10 @@ class Preprocessor():
 
         if verbose: t = TimeIt("Vectorizing training data")
         self.X_train[-1] = self.vectorizer(self.X_train[-1]).numpy()
-        self.X_train.append(np.roll(self.Y_train, -1, axis = -2))
         if verbose: t.get_time()
 
         if verbose: t = TimeIt("Vectorizing validation data")
         self.X_val[-1] = self.vectorizer(self.X_val[-1]).numpy()
-        self.X_val.append(np.roll(self.Y_val, -1, axis = -2))
         if verbose: t.get_time()
 
         self.input_shape = self.get_input_shapes(self.X_train)
@@ -104,10 +102,10 @@ class Preprocessor():
         x = []
         for model in models:
             if (model == "y"):
-                x.append(np.expand_dims(pivot[model].iloc[:,:-self.forecast_horizon].to_numpy(), -1))
+                x.append(pivot[model].iloc[:,:-self.forecast_horizon].to_numpy())
             else:
-                x.append(np.expand_dims(pivot[model].to_numpy(), -1))
-        y = np.expand_dims(pivot["y"].iloc[:,-self.forecast_horizon:].to_numpy(), -1)
+                x.append(pivot[model].to_numpy())
+        y = pivot["y"].iloc[:,-self.forecast_horizon:].to_numpy()
         x.append(pivot.index)
         return x, y, models
 

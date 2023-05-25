@@ -50,6 +50,43 @@ class PositionalEmbedding(tf.keras.layers.Layer):
         return tf.cast(pos_encoding, dtype=tf.float32)
 
 
+class CoherenceLayer(tf.keras.layers.Layer):
+    
+    def __init__(
+        self, 
+        context_size: int, 
+        timesteps: int,
+        **kwargs
+    ) -> None:
+        
+        super(CoherenceLayer, self).__init__(**kwargs)
+        self.timesteps = timesteps
+        self.context_size = context_size
+
+    def build(
+        self, 
+        input_shapes: list
+    ) -> None:
+        self.n = len(input_shapes)
+        self.context_list = [tf.keras.layers.Dense(self.context_size) for _ in range(self.n)]
+        for i, layer in enumerate(self.context_list):
+            layer.build(input_shapes[i])
+            
+        self.output_layer = tf.keras.layers.Dense(self.timesteps)
+        self.output_layer.build((None, self.context_size))
+        super(CoherenceLayer, self).build(input_shapes)
+
+    def call(
+        self, 
+        inputs: list
+    ) -> tf.Tensor:
+        context_list = [layer(inputs[i]) for i, layer in enumerate(self.context_list)]
+        context = tf.stack(context_list, axis=-1)
+        context = tf.reduce_max(context, axis=-1)
+        output = self.output_layer(context)
+        return output
+
+
 class BaseAttention(tf.keras.layers.Layer):
   
     def __init__(
@@ -254,7 +291,7 @@ class BranchOutput(tf.keras.layers.Layer):
         self.flatten = tf.keras.layers.Flatten()
         self.dense = tf.keras.layers.Dense(output_size)
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
-        self.add = tf.keras.layers.Add()
+        #self.add = tf.keras.layers.Add()
         self.layer_norm = tf.keras.layers.LayerNormalization()
 
     def call(
@@ -266,7 +303,7 @@ class BranchOutput(tf.keras.layers.Layer):
         inputs = self.flatten(inputs)
         outputs = self.dense(inputs)
         outputs = self.dropout(outputs, training=training)
-        outputs = self.add([inputs, outputs])
+        #outputs = self.add([inputs, outputs])
         outputs = self.layer_norm(outputs)
         return outputs
 

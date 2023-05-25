@@ -9,8 +9,9 @@ import tensorflow_models as tfm
 import matplotlib.pyplot as plt
 from datetime import datetime
 from truesight.preprocessing import Preprocessor
-from truesight.layers import FeedForward, LSTM, BranchOutput
-from truesight.transformer import Transformer
+from keras import backend as K
+from truesight.transformer import Encoder
+from truesight.layers import CoherenceLayer
 
 class TrueSight:
 
@@ -36,33 +37,41 @@ class TrueSight:
         x_outputs = []
         x = []
         for i in range(len(self.preprocessor.models)):
-            x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[i], 1), name = f"input_{i}"))
+            x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[i],), name = f"input_{i}"))
             x.append(x_inputs[i])
-            x[i] = FeedForward(hparams['dff'], hparams['dropout_rate'])(x[i])
-            x[i] = tf.keras.layers.LSTM(hparams['d_model'], return_sequences=True)(x[i])
-            x[i] = BranchOutput(hparams['dff'])(x[i])
+            x[i] = tf.keras.layers.LayerNormalization(epsilon=1e-8)(x[i])
+            x[i] = tf.expand_dims(x[i], axis=-1)
+            x[i] = tf.keras.layers.Dropout(hparams['dropout_rate'], name=f"dropout_{i}")(x[i], training = True)
+            x[i] = tf.keras.layers.Dense(hparams['dff'], activation='selu', name=f"dense_input_{i}")(x[i])
+            x[i] = tf.keras.layers.Conv1D(hparams['d_model'], kernel_size=7, activation='selu', padding='same', name=f"conv1d_{i}_1")(x[i])
+            x[i] = tf.keras.layers.MaxPooling1D(pool_size=2, padding='same', name=f"max_pool_{i}_1")(x[i])
+            x[i] = tf.keras.layers.Conv1D(hparams['d_model'], kernel_size=3, activation='selu', padding='same', name=f"conv1d_{i}_2")(x[i])
+            x[i] = tf.keras.layers.MaxPooling1D(pool_size=2, padding='same', name=f"max_pool_{i}_2")(x[i])
+            x[i] = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hparams['d_model'], return_sequences=True), name=f"bidirectional_lstm_{i}")(x[i])
+            x[i] = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(hparams['dff'], activation='selu'), name=f"timedistributed_dense_{i}")(x[i])
+            x[i] = tf.keras.layers.Flatten(name=f"flatten_{i}")(x[i])
+            x[i] = tf.keras.layers.LayerNormalization(epsilon=1e-8)(x[i])
             x_outputs.append(x[i])
-            
-        x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[-2],), name = "transformer_input"))
-        x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[-1],), name = "shifted_ground_truth"))
         
-        x.append(x_inputs[-2])
-        x[-2] = tf.keras.layers.Embedding(self.preprocessor.vectorizer.vocabulary_size(), hparams['d_model'] * hparams['num_heads'])(x[-2])
-        x[-2] = Transformer(
-            hparams['num_layers'], 
-            hparams['d_model'], 
-            hparams['num_heads'], 
-            hparams['dff'], 
-            self.preprocessor.vectorizer.vocabulary_size(), 
-            hparams['dropout_rate'])((x[-2], x[-1]))
-        x[-2] = BranchOutput(hparams['dff'])(x[-2])
-        x_outputs.append(x[-2])
+        x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[-1],), name = "transformer_input"))
+        x.append(x_inputs[-1])
+        #x[-1] = tf.expand_dims(x[-1], axis=-1)
+        #x[-1] = Encoder(
+        #    num_layers = hparams['num_layers'],
+        #    d_model = hparams['d_model'], 
+        #    num_heads = hparams['num_heads'], 
+        #    dff = hparams['dff'], 
+        #    vocab_size = self.preprocessor.vectorizer.vocabulary_size(),
+        #    dropout_rate = hparams['dropout_rate'])(x[-1])
+        #x[-1] = tf.keras.layers.Flatten(name=f"flatten_descriptor")(x[-1])
+        #x[-1] = tf.keras.layers.LayerNormalization(epsilon=1e-8)(x[-1])
+        #x_outputs.append(x[-1])
 
-        y = tf.keras.layers.Concatenate(name="concatenate")(x_outputs)
-        y = FeedForward(
-            self.preprocessor.forecast_horizon,
-            hparams['dropout_rate'], 
-            name="feedforward")(y)
+        #y = tf.keras.layers.Concatenate(name="concatenate")(x_outputs)
+        #y = tf.keras.layers.Dense(self.preprocessor.forecast_horizon, name="output")(y)
+        
+        y = CoherenceLayer(context_size=hparams['d_model'], timesteps=self.preprocessor.forecast_horizon, name="output")(x)
+        
         model = tf.keras.Model(x_inputs, y, name="TrueSight")
         optimizer = tf.keras.optimizers.Adam(learning_rate=hparams['learning_rate'])
         model.compile(optimizer=optimizer, loss='mse')
@@ -76,7 +85,7 @@ class TrueSight:
             save_best_model: bool = True,
             verbose: bool = True
         ):
-
+        K.set_value(self.model.optimizer.learning_rate, self.hparams['learning_rate'])
         self.history = self.model.fit(
             x = self.preprocessor.X_train,
             y = self.preprocessor.Y_train,
@@ -94,7 +103,7 @@ class TrueSight:
             X: list,
             n_repeats: int = 1,
             batch_size: int = 128,
-            n_quantiles: int = 10,
+            n_quantiles: int = 1,
             return_quantiles: bool = False,
             verbose: bool = True
         ) -> np.ndarray:
@@ -104,7 +113,7 @@ class TrueSight:
             yhat.append(self.model.predict(X, batch_size=batch_size, verbose=verbose))
         yhat = np.array(yhat)
 
-        if return_quantiles: yhat = np.quantile(yhat, np.linspace(0, 1, n_quantiles), axis=0)
+        if return_quantiles or n_quantiles != 1: yhat = np.quantile(yhat, np.linspace(0, 1, n_quantiles), axis=0)
         else: yhat = np.mean(yhat, axis=0)
         return yhat
 
