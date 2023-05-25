@@ -5,6 +5,7 @@ import json
 import optuna
 import numpy as np
 import tensorflow as tf
+import tensorflow_models as tfm
 import matplotlib.pyplot as plt
 from datetime import datetime
 from truesight.preprocessing import Preprocessor
@@ -36,15 +37,15 @@ class TrueSight:
             x_inputs.append(tf.keras.layers.Input((self.preprocessor.input_shape[i], 1), name = f"input_{i}"))
             x.append(x_inputs[i])
             x[i] = tf.keras.layers.LayerNormalization(epsilon=1e-8)(x[i])
-            x[i] = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name=f"dense_input_{i}")(x[i])
+            x[i] = tf.expand_dims(x[i], axis=-1)
             x[i] = tf.keras.layers.Dropout(hparams['dropout_rate'], name=f"dropout_{i}")(x[i], training = True)
-            x[i] = tf.keras.layers.Conv1D(hparams['num_filters'], kernel_size=hparams['kernel_size'], activation='selu', padding='same', name=f"conv1d_{i}_1")(x[i])
+            x[i] = tf.keras.layers.Dense(hparams['dff'], activation='selu', name=f"dense_input_{i}")(x[i])
+            x[i] = tf.keras.layers.Conv1D(hparams['d_model'], kernel_size=7, activation='selu', padding='same', name=f"conv1d_{i}_1")(x[i])
             x[i] = tf.keras.layers.MaxPooling1D(pool_size=2, padding='same', name=f"max_pool_{i}_1")(x[i])
-            x[i] = tf.keras.layers.Conv1D(hparams['num_filters'], kernel_size=hparams['kernel_size'], activation='selu', padding='same', name=f"conv1d_{i}_2")(x[i])
+            x[i] = tf.keras.layers.Conv1D(hparams['d_model'], kernel_size=3, activation='selu', padding='same', name=f"conv1d_{i}_2")(x[i])
             x[i] = tf.keras.layers.MaxPooling1D(pool_size=2, padding='same', name=f"max_pool_{i}_2")(x[i])
-            x[i] = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hparams['lstm_units'], return_sequences=True), name=f"bidirectional_lstm_{i}")(x[i])
-            x[i] = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(hparams['hidden_size'], activation='selu'), name=f"timedistributed_dense_{i}")(x[i])
-            x[i] = tf.keras.layers.MultiHeadAttention(hparams['num_heads'], hparams['key_dim'], name = f"multihead_self_attention_{i}")(x[i], x[i])
+            x[i] = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hparams['d_model'], return_sequences=True), name=f"bidirectional_lstm_{i}")(x[i])
+            x[i] = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(hparams['dff'], activation='selu'), name=f"timedistributed_dense_{i}")(x[i])
             x[i] = tf.keras.layers.Flatten(name=f"flatten_{i}")(x[i])
             x[i] = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name=f"dense_output_{i}")(x[i])
             x_outputs.append(x[i])
@@ -62,6 +63,7 @@ class TrueSight:
         y = tf.keras.layers.Dense(hparams['hidden_size'], activation='selu', name="dense_output")(y)
         y = tf.keras.layers.Dropout(hparams['dropout_rate'], name="dropout_output")(y, training = True)
         y = tf.keras.layers.Dense(self.preprocessor.forecast_horizon, activation='selu', name="output_dense")(y)
+
         model = tf.keras.Model(x_inputs, y, name="TrueSight")
         optimizer = tf.keras.optimizers.Adam(learning_rate=hparams['learning_rate'])
         model.compile(optimizer=optimizer, loss='mse')
@@ -75,7 +77,7 @@ class TrueSight:
             save_best_model: bool = True,
             verbose: bool = True
         ):
-
+        K.set_value(self.model.optimizer.learning_rate, self.hparams['learning_rate'])
         self.history = self.model.fit(
             x = self.preprocessor.X_train,
             y = self.preprocessor.Y_train,
@@ -93,7 +95,7 @@ class TrueSight:
             X: list,
             n_repeats: int = 1,
             batch_size: int = 128,
-            n_quantiles: int = 10,
+            n_quantiles: int = 1,
             return_quantiles: bool = False,
             verbose: bool = True
         ) -> np.ndarray:
@@ -103,7 +105,7 @@ class TrueSight:
             yhat.append(self.model.predict(X, batch_size=batch_size, verbose=verbose))
         yhat = np.array(yhat)
 
-        if return_quantiles: yhat = np.quantile(yhat, np.linspace(0, 1, n_quantiles), axis=0)
+        if return_quantiles or n_quantiles != 1: yhat = np.quantile(yhat, np.linspace(0, 1, n_quantiles), axis=0)
         else: yhat = np.mean(yhat, axis=0)
         return yhat
 
@@ -125,18 +127,18 @@ class TrueSight:
             num_heads: int = 4,
             key_dim: int = 64,
             learning_rate: float = 0.001,
-            dropout_rate: float = 0.2,
         ) -> None:
+        
         self.hparams = {
             'embedding_dim': embedding_dim,
             'num_filters': num_filters,
             'kernel_size': kernel_size,
             'lstm_units': lstm_units,
-            'hidden_size': hidden_size,
+            'd_model': d_model,
+            'dff': dff,
             'num_heads': num_heads,
-            'key_dim': key_dim,
-            'learning_rate': learning_rate,
             'dropout_rate': dropout_rate,
+            'learning_rate': learning_rate
         }
 
     def objective(self, trial):
@@ -154,13 +156,12 @@ class TrueSight:
             'num_filters': num_filters,
             'kernel_size': kernel_size,
             'lstm_units': lstm_units,
-            'hidden_size': hidden_size,
+            'd_model': d_model,
+            'dff': dff,
             'num_heads': num_heads,
-            'key_dim': key_dim,
-            'learning_rate': learning_rate,
             'dropout_rate': dropout_rate,
+            'learning_rate': learning_rate
         }
-
         model = self.get_model(hparams)
         model.fit(self.preprocessor.X_train, self.preprocessor.Y_train, epochs = self.epochs, batch_size = self.batch_size, verbose = 0)
         score = model.evaluate(self.preprocessor.X_val, self.preprocessor.Y_val, batch_size = self.batch_size, verbose = 0)
@@ -180,18 +181,19 @@ class TrueSight:
             min_kernel_size: int = 3,
             max_kernel_size: int = 21,
             min_lstm_units: int = 32,
-            max_lstm_units: int = 256,
-            min_hidden_size: int = 128,
-            max_hidden_size: int = 1024,
-            min_num_heads: int = 2,
+            max_lstm_units: int = 512,
+            min_d_model: int = 32,
+            max_d_model: int = 512,
+            min_dff: int = 32,
+            max_dff: int = 512,
+            min_num_heads: int = 1,
             max_num_heads: int = 10,
-            min_key_dim: int = 16,
-            max_key_dim: int = 128,
+            min_dropout_rate: float = 0.1,
+            max_dropout_rate: float = 0.5,
             min_learning_rate: float = 0.0001,
             max_learning_rate: float = 0.01,
-            min_dropout_rate: float = 0.05,
-            max_dropout_rate: float = 0.4,
         ) -> dict:
+
 
         self.batch_size = batch_size
         self.epochs = epochs
