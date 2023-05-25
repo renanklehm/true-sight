@@ -1,4 +1,5 @@
 import __future__
+import multiprocessing
 import warnings
 import pandas as pd
 import numpy as np
@@ -104,8 +105,8 @@ class Preprocessor():
             if (model == "y"):
                 x.append(pivot[model].iloc[:,:-self.forecast_horizon].to_numpy())
             else:
-                x.append(pivot[model].to_numpy())
-        y = pivot["y"].iloc[:,-self.forecast_horizon:].to_numpy()
+                x.append(np.expand_dims(pivot[model].to_numpy(), -1))
+        y = np.expand_dims(pivot["y"].iloc[:,-self.forecast_horizon:].to_numpy(), -1)
         x.append(pivot.index)
         return x, y, models
 

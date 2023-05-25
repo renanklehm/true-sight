@@ -19,11 +19,10 @@ setup(
     install_requires=[
         'tensorflow>=2.11.0',
         'optuna>=2.10.1',
-        'matplotlib>=3.6.3',
-        'numpy',
+        'numpy>=1.23.5',
         'pandas',
+        'matplotlib',
         'scipy',
         'tqdm',
-        'PyQt5'
     ]
 )

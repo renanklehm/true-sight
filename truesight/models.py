@@ -9,13 +9,15 @@ class AdditiveDecomposition(StatisticalForecaster):
 
     def __init__(
         self, 
-        season_length: int
+        season_length: int,
+        alias: str = 'AdditiveDecomposition'
     ) -> None:
         
         self.season_length = season_length
         self.trend_coeff = None
         self.seasonality = None
         self.noise = None
+        self.alias = alias
 
     def fit(
         self, 
@@ -52,3 +54,6 @@ class AdditiveDecomposition(StatisticalForecaster):
         forecast = trend_forecast + seasonality_forecast + noise_forecast
 
         return forecast
+
+    def __repr__(self) -> str:
+        return f'{self.alias}'
