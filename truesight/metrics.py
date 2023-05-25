@@ -118,12 +118,12 @@ class Evaluator:
         ytrue = np.squeeze(self.y_true[idx])
         yhat = np.squeeze(self.y_pred.mean(axis=0)[idx])
 
-        range_input = np.arange(0, self.x[-1].shape[1])
-        range_output = np.arange(self.x[-1].shape[1], len(ytrue) + self.x[-1].shape[1])
+        range_input = np.arange(0, self.x[-2].shape[1])
+        range_output = np.arange(self.x[-2].shape[1], len(ytrue) + self.x[-2].shape[1])
 
         _, ax = plt.subplots(figsize=(10, 6), dpi=100)
         ax.plot(range_output, ytrue, ".-", color = "darkslategray", label = "True data")
-        ax.plot(range_input, np.squeeze(self.x[-1][idx]), label = "Input", color = "darkslategray", alpha = 0.5)
+        ax.plot(range_input, np.squeeze(self.x[-2][idx]), label = "Input", color = "darkslategray", alpha = 0.5)
 
         for i in range(yhat.shape[0] // 2):
             if (i == 0):

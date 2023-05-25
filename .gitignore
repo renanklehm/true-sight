@@ -8,6 +8,8 @@ hparams*
 *.csv
 *.h5
 *.pypirc
+.vscode*
+launch.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
