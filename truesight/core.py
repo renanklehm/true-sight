@@ -7,23 +7,24 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from datetime import datetime
+from truesight.layers import FeedForward, WeightedSumLayer
 
-class TrueSight:
+
+class OLD(tf.keras.Model):
 
     def __init__(
             self,
-            models: list,
             input_shape: list, 
             forecast_horizon: int,
+            hparams_folder: str = './hparams',
+            model_folder: str = 'best_model'            
         ) -> None:
-        self.model_folder = 'best_model'
-        self.hparams_folder = './hparams'
+        self.model_folder = hparams_folder
+        self.hparams_folder = model_folder
         os.makedirs(self.hparams_folder, exist_ok=True)
+        
         self.input_shape = input_shape
         self.forecast_horizon = forecast_horizon
-        self.models = models
-        self.set_hparams()
-        self.model = self.get_model(self.hparams)
 
     def get_model(
             self, 
@@ -130,33 +131,6 @@ class TrueSight:
             'dropout_rate': dropout_rate,
         }
 
-    def objective(self, trial):
-        num_filters = trial.suggest_int("num_filters", self.min_num_filters, self.max_num_filters)
-        kernel_size = trial.suggest_int("kernel_size", self.min_kernel_size, self.max_kernel_size)
-        lstm_units = trial.suggest_int("lstm_units", self.min_lstm_units, self.max_lstm_units)
-        hidden_size = trial.suggest_int("hidden_size", self.min_hidden_size, self.max_hidden_size)
-        num_heads = trial.suggest_int("num_heads", self.min_num_heads, self.max_num_heads)
-        key_dim = trial.suggest_int("key_dim", self.min_key_dim, self.max_key_dim)
-        dropout_rate = trial.suggest_float("dropout_rate", self.min_dropout_rate, self.max_dropout_rate )
-        learning_rate = trial.suggest_float("learning_rate", self.min_learning_rate, self.max_learning_rate)
-        hparams = {
-            'num_filters': num_filters,
-            'kernel_size': kernel_size,
-            'lstm_units': lstm_units,
-            'hidden_size': hidden_size,
-            'num_heads': num_heads,
-            'key_dim': key_dim,
-            'learning_rate': learning_rate,
-            'dropout_rate': dropout_rate,
-        }
-
-        model = self.get_model(hparams)
-        model.fit(self.X_train, self.Y_train, epochs = self.epochs, batch_size = self.batch_size, verbose = 0)
-        score = model.evaluate(self.X_val, self.Y_val, batch_size = self.batch_size, verbose = 0)
-        score = np.array(score).mean()
-        with open(f'{self.hparams_folder}/{datetime.now().strftime("%Y%m%d%H%M%S")}-{score}.json', 'w') as file: json.dump(hparams, file)
-        return score
-
     def auto_tune(
             self,
             X_train: list,
@@ -225,3 +199,102 @@ class TrueSight:
         plt.plot(self.history.history['val_loss'], label='validation')
         plt.legend()
         plt.show()
+
+class TrueSight(tf.keras.Model):
+
+    def __init__(
+            self,
+            models: list,
+            forecast_horizon: int,
+            filter_size: int = 64,
+            context_size: int = 256,
+            hidden_size: int = 512,
+            dropout_rate: int = 0.1,
+        ) -> None:
+        
+        super(TrueSight, self).__init__()
+        self.models = models
+        self.n_models = len(models)
+        self.forecast_horizon = forecast_horizon
+        self.filter_size = filter_size
+        self.context_size = context_size
+        self.hidden_size = hidden_size
+        self.dropout_rate = dropout_rate
+        
+        self.branches = {}
+        for i in range(self.n_models):
+            self.branches[models[i]] = tf.keras.layers.Dense(context_size, activation='selu', name=f'branch_{models[i]}')
+        self.weighted_sum = WeightedSumLayer(n_models=self.n_models, name='weighted_sum')
+        self.ff = FeedForward(filter_size=filter_size, context_size=context_size, hidden_size=hidden_size, dropout_rate=dropout_rate, name='feed_forward')
+        self.output_layer = tf.keras.layers.Dense(forecast_horizon, activation='relu', name='output')
+    
+    def set_hparams(
+        self,
+        hparams: dict,
+    ) -> None:
+        
+        self.__init__(self.models, self.forecast_horizon, hparams['filter_size'], hparams['context_size'], hparams['hidden_size'], hparams['dropout_rate'])
+    
+    def build(
+        self, 
+        input_shape: list,
+    ) -> None:
+        
+        for idx, branch in enumerate(self.branches.values()):
+            branch.build(input_shape[idx])
+        self.ff.build((None, 1))
+        self.output_layer.build((None, self.hidden_size))
+        return 
+    
+    def call(
+        self, 
+        inputs: list,
+    ) -> tf.Tensor:
+        
+        outputs = []
+        for idx, model in enumerate(self.models):
+            outputs.append(self.branches[model](inputs[idx]))
+        outputs = self.weighted_sum(outputs)
+        outputs = self.ff(outputs, training=True)
+        outputs = self.output_layer(outputs)
+        return outputs
+    
+    def fit(
+        self,
+        **kwargs
+    ) -> None:
+        
+        self.history = super(TrueSight, self).fit(**kwargs)
+    
+    def plot_training_history(
+        self,
+    ) -> None:
+        
+        if not hasattr(self, 'history'): raise Exception('No history found. Please train the model first.')
+        plt.plot(self.history.history['loss'], label='train')
+        plt.plot(self.history.history['val_loss'], label='validation')
+        plt.legend()
+        plt.show(
+    )
+
+    def predict(
+        self,
+        X: list,
+        n_repeats: int = 1,
+        batch_size: int = 128,
+        n_quantiles: int = 10,
+        return_quantiles: bool = False,
+        verbose: bool = True
+    ) -> np.ndarray:
+
+        yhat = []
+        for i in range(n_repeats):
+            yhat.append(super(TrueSight, self).predict(X, batch_size=batch_size, verbose=verbose))
+        yhat = np.array(yhat)
+
+        if return_quantiles or n_quantiles > 1: 
+            yhat = np.quantile(yhat, np.linspace(0, 1, n_quantiles), axis=0)
+        else: 
+            yhat = np.mean(yhat, axis=0)
+        
+        return yhat

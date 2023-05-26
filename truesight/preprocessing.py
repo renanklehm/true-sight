@@ -52,10 +52,10 @@ class Preprocessor():
         x = []
         for model in models:
             if (model == "y"):
-                x.append(np.expand_dims(pivot[model].iloc[:,:-self.forecast_horizon].to_numpy(), -1))
+                x.append(pivot[model].iloc[:,:-self.forecast_horizon].to_numpy())
             else:
-                x.append(np.expand_dims(pivot[model].to_numpy(), -1))
-        y = np.expand_dims(pivot["y"].iloc[:,-self.forecast_horizon:].to_numpy(), -1)
+                x.append(pivot[model].to_numpy())
+        y = pivot["y"].iloc[:,-self.forecast_horizon:].to_numpy()
         ids = pivot.index
         return x, y, ids, models
 

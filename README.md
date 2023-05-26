@@ -33,7 +33,7 @@ import tensorflow as tf
 from truesight.preprocessing import Preprocessor
 from truesight.core import TrueSight
 from truesight.metrics import Evaluator, smape, mape, mse, rmse, mae
-from truesight.utils import get_input_shapes, generate_syntetic_data
+from truesight.utils import AutoTune, generate_syntetic_data
 ```
 
 Load the data
@@ -53,7 +53,7 @@ from truesight.models import AdditiveDecomposition
 from truesight.utils import ModelWrapper
 
 models = [
-    ModelWrapper(LinearRegression, horizon=forecast_horizon, season_length=season_length), 
+    ModelWrapper(LinearRegression, horizon=forecast_horizon, season_length=season_length, alias="LinearRegression"), 
     ModelWrapper(SeasonalNaive, horizon=forecast_horizon, season_length=season_length), 
     ModelWrapper(AutoETS, horizon=forecast_horizon, season_length=season_length),
     ModelWrapper(AdditiveDecomposition, horizon=forecast_horizon, season_length=season_length)
@@ -70,24 +70,22 @@ X_train, Y_train, ids_train, X_val, Y_val, ids_val, models = preprocessor.make_d
     )
 ```
 
-Create the model
+Create the model and automatical automatically find the hyperparameters
 
 ``` python
-input_shapes = get_input_shapes(X_train)
-truesight = TrueSight(models, input_shapes, forecast_horizon = forecast_horizon)
-truesight.auto_tune(X_train, Y_train, X_val, Y_val, n_trials = 50, batch_size = 512, epochs = 5)
-```
-
-Use the `auto_tune` to automatically define the hyperparameters
-
-``` python
-truesight.auto_tune(X_train, Y_train, X_val, Y_val, n_trials = 10, batch_size = 512, epochs = 5)
+optimizer = tf.keras.optimizers.Adam
+hparams, optimizer = AutoTune(optimizer=optimizer).tune(X_train, Y_train, n_trials = 20, epochs = 10, batch_size = 32, stats_models = models)
+ts = TrueSight(models, forecast_horizon)
+ts.set_hparams(hparams)
+ts.compile(optimizer=optimizer, loss='mse')
 ```
 
 Or set then manually
 
 ``` python
-truesight.set_hparams(lstm_units=256, hidden_size=1024, num_heads=8, dropout_rate=0.1)
+optimizer = tf.keras.optimizers.Adam
+ts = TrueSight(models, forecast_horizon, filter_size = 128, context_size = 512, hidden_size = 1024, dropout_rate = 0.1)
+ts.compile(optimizer=optimizer, loss='mse')
 ```
 
 Train the model, as the model is built on the tensorflow framework, any tensorflow callback can be used
@@ -95,17 +93,17 @@ Train the model, as the model is built on the tensorflow framework, any tensorfl
 ``` python
 callbacks = [
     tf.keras.callbacks.EarlyStopping(patience = 100, restore_best_weights = True, monitor = "val_loss"),
-    tf.keras.callbacks.ReduceLROnPlateau(monitor = "val_loss", factor = 0.5, patience = 25, verbose = 1),
+    tf.keras.callbacks.ReduceLROnPlateau(monitor = "val_loss", factor = 0.5, patience = 25, verbose = False),
 ]
-truesight.fit(
-    X_train, Y_train, 
-    X_val, Y_val, 
+ts.fit(
+    x = X_train, y = Y_train, 
+    validation_data = [X_val, Y_val], 
     batch_size = 128, 
     epochs = 1000, 
     verbose = False, 
     callbacks = callbacks,
- )
-truesight.plot_history()
+)
+ts.plot_training_history()
 ```
 ![Training Log](figures/training_history.png)
 
@@ -113,39 +111,18 @@ truesight.plot_history()
 Evaluate the results
 
 ``` python
-Y_hat = truesight.predict(
-    X_val, 
-    batch_size = 500, 
-    n_repeats = 100, 
-    n_quantiles = 15, 
-    return_quantiles = True, 
-    verbose = False,
- )
-evaluator = Evaluator(X_val, Y_val, Y_hat, ids_val)
-evaluator.evaluate_prediction([smape, mape, mse, rmse, mae], return_mean=False)
+yhat = ts.predict(X_val, n_repeats = 100, n_quantiles = 15, verbose = False)
+evaluator = Evaluator(X_val, Y_val, yhat, ids_val)
+evaluator.evaluate_prediction(evaluators = [smape, mape, mse, rmse, mae], return_mean = True)
 ```
-| id |         mse |      rmse |      mae |
-|---:|------------:|----------:|---------:|
-| 10 |  1164.51    |  34.1249  | 25.9397  |
-| 13 |     2.91094 |   1.70615 |  1.69313 |
-| 18 |     2.62309 |   1.6196  |  1.5549  |
-| 38 |     2.77819 |   1.66679 |  1.62896 |
-| 45 |   892.701   |  29.8781  | 10.0897  |
-| 46 |     2.96284 |   1.72129 |  1.71549 |
-| 50 |  3585.54    |  59.8794  | 49.0362  |
-| 51 | 12199.1     | 110.449   | 93.9491  |
-| 53 |     2.6345  |   1.62311 |  1.56625 |
-| 54 |     2.77184 |   1.66488 |  1.63493 |
-| 61 |   303.464   |  17.4202  | 14.6694  |
-| 67 |     2.70393 |   1.64436 |  1.60988 |
-| 69 |  2578.09    |  50.7749  | 38.986   |
-| 70 |     3.09074 |   1.75805 |  1.75805 |
-| 73 |     2.80945 |   1.67614 |  1.65109 |
-| 75 |     2.88333 |   1.69804 |  1.68085 |
-| 78 |     3.09091 |   1.7581  |  1.7581  |
-| 81 |     2.64539 |   1.62647 |  1.56712 |
-| 83 |   491.263   |  22.1644  | 18.4432  |
-| 86 |     2.84002 |   1.68523 |  1.64177 |
+| metric |   value   |
+|-------:|----------:|
+|smape   |   0.234369|
+|mape    |   0.293816|
+|mse     | 816.238082|
+|rmse    |  21.218396|
+|mae     |  15.885432|
+
 
 ``` python
 evaluator.plot_exemple()
