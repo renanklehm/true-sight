@@ -1,9 +1,9 @@
 # Pickle
+_notebook.ipynb
 pickle/*
 best_model*
 hparams*
 .vscode*
-*.ipynb
 *.pkl
 *.csv
 *.h5
