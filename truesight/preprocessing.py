@@ -2,6 +2,7 @@ import __future__
 import warnings
 import pandas as pd
 import numpy as np
+import tensorflow as tf
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore", module="statsforecast.arima")
@@ -9,17 +10,36 @@ class Preprocessor():
 
     def __init__(
             self, 
-            df: pd.DataFrame
+            df: pd.DataFrame,
+            date_col: str = "ds",
+            target_col: str = "y",
+            id_col: str | list = "unique_id",
+            categorical_cols: list = [],
+            date_freq: str = None,
         ) -> None:
+
         self.df = df.copy()
+        
+        if isinstance(id_col, str):
+            self.df.rename(columns = {date_col: "ds", id_col: "unique_id", target_col: "y"}, inplace = True)
+        else:
+            self.df.rename(columns = {date_col: "ds", target_col: "y"}, inplace = True)
+            self.df["unique_id"] = self.df[id_col].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
+        
+        if len(categorical_cols) > 0:
+            self.df['category'] = self.df[categorical_cols].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
+            self.df = self.df[['unique_id', 'category', 'ds', 'y']]
+        else:
+            self.df = self.df[['unique_id', 'ds', 'y']]
+        
         self.df = self.df.sort_values("ds")
         self.df = self.df.reset_index(drop = True)
+        self.vectorizer = self.get_vectorizer(self.df)
     
     def make_dataset(
             self,
             forecast_horizon: int, 
             season_length: int,
-            date_freq: str = "MS",
             train_split: float = 0.8,
             models: list = [],
             fallback_model = None,
@@ -28,7 +48,6 @@ class Preprocessor():
 
         self.forecast_horizon = forecast_horizon
         self.season_length = season_length
-        self.date_freq = date_freq
 
         training_ids = np.random.choice(self.df.unique_id.unique(), int(len(self.df.unique_id.unique()) * train_split), replace = False)
         self.train_df = self.df[self.df.unique_id.isin(training_ids)]
@@ -40,8 +59,37 @@ class Preprocessor():
         self.val_df = pd.merge(self.val_df, val_forecast_df, on = ["unique_id", "ds"], how = "left")
         X_train, Y_train, ids_train, models = self.format_dataset(self.train_df)
         X_val, Y_val, ids_val, _ = self.format_dataset(self.val_df)
+        X_train.insert(0, self.vectorizer(ids_train).numpy())
+        X_val.insert(0, self.vectorizer(ids_val).numpy())
 
         return X_train, Y_train, ids_train, X_val, Y_val, ids_val, models
+
+    def get_vectorizer(
+            self, 
+            local_df: pd.DataFrame
+        ) -> tf.keras.layers.TextVectorization:
+
+        corpus = local_df['category'].unique()
+        seq_lenght = self.get_seq_lenght(corpus)
+        vectorizer = tf.keras.layers.TextVectorization(
+            standardize='lower_and_strip_punctuation',
+            split='whitespace',
+            output_mode='int',
+            output_sequence_length=seq_lenght,
+        )
+        vectorizer.adapt(corpus)
+        return vectorizer
+    
+    def get_seq_lenght(
+        self,
+        corpus: list
+    ) -> int:
+        
+        seq_lenght = 0
+        for x in corpus:
+            if len(x.split(' ')) > seq_lenght:
+                seq_lenght = len(x)
+        return seq_lenght
 
     def format_dataset(
             self, 
