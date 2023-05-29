@@ -178,6 +178,7 @@ class AutoTune:
 
 def generate_syntetic_data(
     num_time_steps: int,
+<<<<<<< Updated upstream
     seasonal_lenght: int,
     num_series: int,
     start_date: str = '2020-01-01',
@@ -232,6 +233,79 @@ def generate_time_series(
     
     series += trend
     return series
+=======
+    num_series: int,
+    start_date: str,
+    freq: str,    
+    start_intercept: float,
+    seasonality_cycles: list[int],
+    seasonality_amplitudes: list[float],
+    trend_slopes: list[float],
+    trend_indexes: list[int],
+    noise_std: float,
+    noise_amplitude: float,
+    irregularity_std: float,
+    allow_negatives: bool = False
+) -> pd.DataFrame:
+
+    if trend_indexes[0] != 0:
+        if len(trend_indexes) == len(trend_slopes) - 1:
+            trend_indexes.insert(0, 0)
+        else:
+            raise ValueError('trend_indexes must start with 0 or have the first index ommited')
+    else:
+        if len(trend_indexes) != len(trend_slopes):
+            raise ValueError('trend_indexes and trend_slopes must have the same length')
+        
+    dataset = pd.DataFrame(index=pd.date_range(start=start_date, periods=num_time_steps, freq=freq))
+    for _ in range(num_series):
+        series = np.zeros(num_time_steps)
+        seasonality = np.zeros(num_time_steps)
+        
+        _seasonality_amplitudes = []
+        for i in range(len(seasonality_amplitudes)):
+            _seasonality_amplitudes.append(seasonality_amplitudes[i] + np.random.normal(0, irregularity_std))
+
+        _trend_slopes = []
+        for i in range(len(trend_slopes)):
+            _trend_slopes.append(trend_slopes[i] + np.random.normal(0, irregularity_std / 2))
+
+        _trend_indexes = []
+        for i in range(len(trend_indexes)):
+            if i == 0:
+                _trend_indexes.append(0)
+            else:
+                _trend_indexes.append(trend_indexes[i] + int(np.random.normal(0, irregularity_std)))
+                _trend_indexes[i] = np.clip(_trend_indexes[i], 0, num_time_steps - 1)
+
+        trend = []
+        intercept = start_intercept
+        for i, slope in enumerate(_trend_slopes):
+            start_index = _trend_indexes[i]
+            end_index = _trend_indexes[i+1] if i+1 < len(_trend_indexes) else len(series)
+            x = np.arange(end_index - start_index)
+            y = slope * x + intercept
+            intercept = y[-1]
+            trend.extend(y)
+        trend = np.array(trend)
+                
+        for idx, season in enumerate(seasonality_cycles):
+            seasonality += _seasonality_amplitudes[idx] * np.sin(2 * np.pi * np.arange(num_time_steps) / season)
+
+        series += trend
+        series += seasonality
+        series += np.random.normal(0, noise_std, size=num_time_steps) * noise_amplitude
+        
+        if not allow_negatives:
+            series = np.clip(series, 0, None)
+        
+        dataset[get_random_string(10)] = series
+    
+    dataset = dataset.copy()
+    dataset.reset_index(inplace=True, names = 'ds')
+    dataset = dataset.melt(id_vars=['ds'], var_name='unique_id', value_name='y')
+    return dataset
+>>>>>>> Stashed changes
 
 def get_random_string(length):
     letters = string.ascii_lowercase

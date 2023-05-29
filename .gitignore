@@ -1,12 +1,14 @@
 secret_1.csv
+<<<<<<< Updated upstream
 _notebook.ipynb
+=======
+>>>>>>> Stashed changes
 test.py
 pickle/*
 best_model*
 hparams*
 .vscode*
 *.pkl
-*.csv
 *.h5
 *.pypirc
 .vscode*
