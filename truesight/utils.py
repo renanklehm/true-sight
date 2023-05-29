@@ -2,21 +2,25 @@ import os
 import json
 import inspect
 import optuna
+import random
+import string
 import tensorflow as tf
 import numpy as np
 import pandas as pd
+from typing import Any
 from sklearn.base import BaseEstimator
-from truesight.base import StatisticalForecaster
 from statsforecast.models import _TS
 from datetime import datetime
 from truesight.core import TrueSight
+from truesight.base import StatisticalForecaster
+from truesight.containers import Dataset
 
 class ModelWrapper:
     def __init__(
         self, 
-        model: object, 
-        horizon: int = None,
-        alias: str = None,
+        model: Any, 
+        horizon: int | None = None,
+        alias: str | None = None,
         **kwargs
     ) -> None:
         
@@ -39,9 +43,9 @@ class ModelWrapper:
             if len(X) % 2 != 0:
                 X = np.insert(X, -1, X.mean())
             mid_size = int(len(X) / 2)
-            self.model.fit(np.expand_dims(X[:-mid_size], -1), np.expand_dims(X[mid_size:], -1))
+            self.model.fit(np.expand_dims(X[:-mid_size], -1), np.expand_dims(X[mid_size:], -1)) # type: ignore
         elif isinstance(self.model, _TS):
-            self.model.fit(np.squeeze(X))
+            self.model.fit(np.squeeze(X))  # type: ignore
         elif isinstance(self.model, StatisticalForecaster):
             self.model.fit(X)
         else:
@@ -52,19 +56,21 @@ class ModelWrapper:
     
     def predict(
         self
-    ) -> np.ndarray:
+    ) -> tf.Tensor:
         
         if isinstance(self.model, BaseEstimator):
-            return np.squeeze(self.model.predict(np.expand_dims(self.X[-self.forecast_horizon:], -1)))
+            return_prediction = np.squeeze(self.model.predict(np.expand_dims(self.X[-self.forecast_horizon:], -1))) # type: ignore
         elif isinstance(self.model, _TS):
-            return np.squeeze(self.model.predict(h=self.forecast_horizon)['mean'])
+            return_prediction = np.squeeze(self.model.predict(h=self.forecast_horizon)['mean'])  # type: ignore
         elif isinstance(self.model, StatisticalForecaster):
-            return np.squeeze(self.model.predict(self.forecast_horizon))
+            return_prediction = np.squeeze(self.model.predict(self.forecast_horizon))  # type: ignore
         else:
             try:
-                np.squeeze(self.model.predict(self.forecast_horizon))
+                return_prediction = np.squeeze(self.model.predict(self.forecast_horizon))
             except:
                 raise ValueError("Unsupported model type.")
+        
+        return tf.convert_to_tensor(return_prediction)
             
     def __repr__(
         self
@@ -76,8 +82,8 @@ class AutoTune:
     
     def __init__(
         self,
-        model: tf.keras.Model = None,
-        optimizer: tf.keras.optimizers.Optimizer = None,
+        model: tf.keras.Model | None = None,
+        optimizer: tf.keras.optimizers.Optimizer | None = None,
         min_lr: float = 1e-5,
         max_lr: float = 1e-2,
         min_dropout: float = 0.0,
@@ -105,29 +111,19 @@ class AutoTune:
         
     def tune(
         self,
-        X: np.ndarray,
-        y: np.ndarray,
+        dataset: Dataset,
         n_trials: int = 10,
         epochs: int = 10,
         batch_size: int = 32,
-        stats_models: list = None,
         save_trials_hparams: bool = False,
         hparams_folder: str = 'hparams'
-    ) -> None:
+    ) -> tuple[dict[str, Any], float]:
         
-        self.X = X
-        self.y = y
+        self.dataset = dataset
         self.epochs = epochs
-        self.batch_size = batch_size
-        self.n_models = len(X)
-        self.forecast_horizon = y.shape[-1]
+        self.batch_size = batch_size        
         self.save_trials_hparams = save_trials_hparams
         self.hparams_folder = hparams_folder
-        
-        if stats_models is None:
-            self.stats_models = ['na'] * self.n_models
-        else:
-            self.stats_models = stats_models
         
         os.makedirs(self.hparams_folder, exist_ok=True)
         file_list = os.listdir(self.hparams_folder)
@@ -154,19 +150,17 @@ class AutoTune:
         context_size = trial.suggest_int('context_size', self.min_contex_size, self.max_contex_size)
         hidden_size = trial.suggest_int('hidden_size', self.min_hidden_size, self.max_hidden_size)
         
-        model = self.model(
-            models = self.stats_models,
-            forecast_horizon = self.forecast_horizon,
+        model: TrueSight = self.model(
+            dataset = self.dataset,
             filter_size = filter_size, 
             context_size = context_size, 
             hidden_size = hidden_size, 
             dropout_rate = dropout_rate
         )
         opt = self.optimizer(learning_rate = lr)
-        model.compile(optimizer = opt, loss = 'mse')
-        
-        model.fit(x = self.X, y = self.y, epochs = self.epochs, batch_size = self.batch_size, verbose = 0)
-        score = model.evaluate(self.X, self.y, batch_size = self.batch_size, verbose = 0)
+        model.compile(optimizer = opt, loss = 'mse') # type: ignore
+        model.fit(train_dataset = self.dataset, epochs = self.epochs, batch_size = self.batch_size, verbose = 0) # type: ignore
+        score = model.evaluate(dataset = self.dataset, batch_size = self.batch_size, verbose = 0) # type: ignore
         score = np.array(score).mean()
         
         hparams = {
@@ -183,10 +177,12 @@ class AutoTune:
         return score
 
 def generate_syntetic_data(
-        num_time_steps: int,
-        seasonal_lenght: int,
-        num_series: int,
-    ) -> pd.DataFrame:
+    num_time_steps: int,
+    seasonal_lenght: int,
+    num_series: int,
+    start_date: str = '2020-01-01',
+    freq: str = 'MS'
+) -> pd.DataFrame:
     
     dataset = []
     for _ in range(num_series):
@@ -204,9 +200,39 @@ def generate_syntetic_data(
         dataset.append(scale_factor * (linear_trend + seasonal_cycle + noise + irregularities) + starting_point)
     dataset = np.array(dataset)
     dataset[dataset < 0] = 0
-    dates = pd.date_range(start='2020-01-01', periods=num_time_steps, freq='MS')
-    ids = np.arange(dataset.shape[0])
+    dates = pd.date_range(start=start_date, periods=num_time_steps, freq=freq)
+    ids = [get_random_string(10) for _ in range(num_series)]
     df = []
     for i, ts in enumerate(dataset):
         df.append(pd.DataFrame({"unique_id": np.tile(ids[i], len(ts)), "ds": dates, "y": ts}))
     return pd.concat(df)
+
+def generate_time_series(
+    length: int, 
+    seasonality_cycles: list[int], 
+    seasonality_amplitudes: list[int], 
+    trend_slopes: list[float], 
+    trend_change_indexes: list[int]
+) -> np.ndarray:
+    
+    series = np.zeros(length)
+    
+    trend = np.arange(length) * trend_slopes[0]
+    for i in range(1, len(trend_slopes)):
+        start_index = trend_change_indexes[i-1]
+        end_index = trend_change_indexes[i]
+        trend[start_index:end_index] = np.arange(end_index - start_index) * trend_slopes[i] + trend[start_index-1]
+    
+    num_seasons = len(seasonality_cycles)
+    for i in range(num_seasons):
+        cycle = seasonality_cycles[i]
+        amplitude = seasonality_amplitudes[i]
+        seasonality = amplitude * np.sin(2 * np.pi * np.arange(length) / cycle)
+        series += seasonality
+    
+    series += trend
+    return series
+
+def get_random_string(length):
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(length))

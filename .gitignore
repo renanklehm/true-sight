@@ -1,5 +1,6 @@
 secret_1.csv
 _notebook.ipynb
+test.py
 pickle/*
 best_model*
 hparams*

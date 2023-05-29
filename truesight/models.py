@@ -14,9 +14,9 @@ class AdditiveDecomposition(StatisticalForecaster):
     ) -> None:
         
         self.season_length = season_length
-        self.trend_coeff = None
-        self.seasonality = None
-        self.noise = None
+        self.trend_coeff: np.ndarray | None = None
+        self.seasonality: np.ndarray | None = None
+        self.noise: np.ndarray | None = None
         self.alias = alias
 
     def fit(
@@ -47,9 +47,9 @@ class AdditiveDecomposition(StatisticalForecaster):
 
         x = np.arange(self.train_lenght, self.train_lenght + forecast_horizon)
 
-        trend_forecast = np.polyval(self.trend_coeff, x)
-        seasonality_forecast = np.tile(self.seasonality[:forecast_horizon], forecast_horizon // self.season_length + 1)[:forecast_horizon]
-        noise_forecast = np.random.choice(self.noise, size=forecast_horizon)
+        trend_forecast = np.polyval(self.trend_coeff, x) # type: ignore
+        seasonality_forecast = np.tile(self.seasonality[:forecast_horizon], forecast_horizon // self.season_length + 1)[:forecast_horizon] # type: ignore
+        noise_forecast = np.random.choice(self.noise, size=forecast_horizon) # type: ignore
 
         forecast = trend_forecast + seasonality_forecast + noise_forecast
 

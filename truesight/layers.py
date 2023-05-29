@@ -27,14 +27,6 @@ class NumericalFeedForward(tf.keras.layers.Layer):
         self.flatten = tf.keras.layers.Flatten()
         self.reshape_dense = tf.keras.layers.Dense(hidden_size, activation='relu')
 
-    def build(
-        self, 
-        input_shapes: tuple
-    ) -> None:
-        
-        self.dense.build(input_shapes)
-        super(NumericalFeedForward, self).build(input_shapes)
-
     def call(
         self, 
         input: tf.Tensor,
@@ -56,9 +48,9 @@ class NumericalFeedForward(tf.keras.layers.Layer):
         x = self.flatten(x)
         x = self.reshape_dense(x)
         
-        return x
+        return x # type: ignore
     
-class WeightedSumLayer(tf.keras.layers.Layer):
+class ContextLayer(tf.keras.layers.Layer):
     
     def __init__(
         self, 
@@ -66,7 +58,7 @@ class WeightedSumLayer(tf.keras.layers.Layer):
         **kwargs
     ) -> None:
         
-        super(WeightedSumLayer, self).__init__(**kwargs)
+        super(ContextLayer, self).__init__(**kwargs)
         self.num_tensors = n_models
         self.w = self.add_weight(
             shape=(n_models,), 
@@ -83,17 +75,20 @@ class WeightedSumLayer(tf.keras.layers.Layer):
         for i in range(self.num_tensors):
             weighted_inputs.append(inputs[i] * self.w[i])
         output = tf.add_n(weighted_inputs)
-        return output
+        
+        return output  # type: ignore
+    
     
 class PositionalEmbedding(tf.keras.layers.Layer):
     
     def __init__(
         self, 
         vocab_size: int, 
-        d_model: int
+        d_model: int,
+        **kwargs
     ) -> None:
         
-        super().__init__()
+        super(PositionalEmbedding, self).__init__(**kwargs)
         self.d_model = d_model
         self.embedding = tf.keras.layers.Embedding(vocab_size, d_model, mask_zero=True) 
         self.pos_encoding = self.positional_encoding(length=2048, depth=d_model)
@@ -104,23 +99,24 @@ class PositionalEmbedding(tf.keras.layers.Layer):
         **kwargs
     ) -> tf.Tensor:
         
-        return self.embedding.compute_mask(*args, **kwargs)
+        return self.embedding.compute_mask(*args, **kwargs)  # type: ignore
+    
 
     def call(
         self, 
         x: tf.Tensor
     ) -> tf.Tensor:
         
-        length = tf.shape(x)[1]
-        x = self.embedding(x)
-        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-        x = x + self.pos_encoding[tf.newaxis, :length, :]
-        return x
+        length = tf.shape(x)[1]  # type: ignore
+        x = self.embedding(x) # type: ignore
+        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32)) # type: ignore
+        x = x + self.pos_encoding[tf.newaxis, :length, :] # type: ignore
+        return x # type: ignore
   
     def positional_encoding(
         self, 
         length: int, 
-        depth: int
+        depth: int | float
     ) -> tf.Tensor:
 
         depth = depth/2
@@ -131,8 +127,7 @@ class PositionalEmbedding(tf.keras.layers.Layer):
         angle_rads = positions * angle_rates
         pos_encoding = np.concatenate([np.sin(angle_rads), np.cos(angle_rads)], axis=-1) 
 
-        return tf.cast(pos_encoding, dtype=tf.float32)
-
+        return tf.cast(pos_encoding, dtype=tf.float32) # type: ignore
 
 class BaseAttention(tf.keras.layers.Layer):
   
@@ -159,11 +154,11 @@ class CrossAttention(BaseAttention):
             key=context,
             value=context,
             return_attention_scores=True
-        )
+        ) # type: ignore
 
         self.last_attn_scores = attn_scores
-        x = self.add([x, attn_output])
-        x = self.layernorm(x)
+        x = self.add([x, attn_output]) # type: ignore
+        x = self.layernorm(x) # type: ignore
         return x
 
 class GlobalSelfAttention(BaseAttention):
@@ -179,8 +174,8 @@ class GlobalSelfAttention(BaseAttention):
             key=x
         )
 
-        x = self.add([x, attn_output])
-        x = self.layernorm(x)
+        x = self.add([x, attn_output]) # type: ignore
+        x = self.layernorm(x) # type: ignore
         return x
 
 class CausalSelfAttention(BaseAttention):
@@ -196,8 +191,8 @@ class CausalSelfAttention(BaseAttention):
             key=x,
             use_causal_mask = True
         )
-        x = self.add([x, attn_output])
-        x = self.layernorm(x)
+        x = self.add([x, attn_output]) # type: ignore
+        x = self.layernorm(x) # type: ignore
         return x
 
 class FeedForward(tf.keras.layers.Layer):
@@ -227,20 +222,20 @@ class FeedForward(tf.keras.layers.Layer):
         x = self.dropout(x, training=training)
         x = self.add([input, x])
         x = self.layer_norm(x) 
-        return x
+        return x # type: ignore
 
 class EncoderLayer(tf.keras.layers.Layer):
     
     def __init__(
         self,
-        *, 
         d_model: int,
         num_heads: int, 
         dff: int, 
-        dropout_rate:float = 0.1
+        dropout_rate:float = 0.1,
+        **kwargs
     ) -> None:
-        super().__init__()
-
+        
+        super(EncoderLayer, self).__init__(**kwargs)
         self.self_attention = GlobalSelfAttention(
             num_heads=num_heads,
             key_dim=d_model,
@@ -253,21 +248,21 @@ class EncoderLayer(tf.keras.layers.Layer):
         x: tf.Tensor
     ) -> tf.Tensor:
         
-        x = self.self_attention(x)
-        x = self.ffn(x)
+        x = self.self_attention(x) # type: ignore
+        x = self.ffn(x) # type: ignore
         return x
 
 class DecoderLayer(tf.keras.layers.Layer):
     def __init__(
         self,
-        *,
         d_model: int,
         num_heads: int,
         dff: int,
-        dropout_rate:float = 0.1
+        dropout_rate:float = 0.1,
+        **kwargs
     ) -> None:
         
-        super(DecoderLayer, self).__init__()
+        super(DecoderLayer, self).__init__(**kwargs)
         self.causal_self_attention = CausalSelfAttention(
             num_heads=num_heads,
             key_dim=d_model,
@@ -286,71 +281,8 @@ class DecoderLayer(tf.keras.layers.Layer):
         context: tf.Tensor
     ) -> tf.Tensor:
         
-        x = self.causal_self_attention(x=x)
-        x = self.cross_attention(x=x, context=context)
+        x = self.causal_self_attention(x=x) # type: ignore
+        x = self.cross_attention(x=x, context=context) # type: ignore
         self.last_attn_scores = self.cross_attention.last_attn_scores
-        x = self.ffn(x)
-        return x
-
-class EncoderLayer(tf.keras.layers.Layer):
-    
-    def __init__(
-        self,
-        *, 
-        d_model: int,
-        num_heads: int, 
-        dff: int, 
-        dropout_rate:float = 0.1
-    ) -> None:
-        super().__init__()
-
-        self.self_attention = GlobalSelfAttention(
-            num_heads=num_heads,
-            key_dim=d_model,
-            dropout=dropout_rate
-        )
-        self.ffn = FeedForward(d_model, dff)
-
-    def call(
-        self, 
-        x: tf.Tensor
-    ) -> tf.Tensor:
-        
-        x = self.self_attention(x)
-        x = self.ffn(x)
-        return x
-
-class DecoderLayer(tf.keras.layers.Layer):
-    def __init__(
-        self,
-        *,
-        d_model: int,
-        num_heads: int,
-        dff: int,
-        dropout_rate:float = 0.1
-    ) -> None:
-        
-        super(DecoderLayer, self).__init__()
-        self.causal_self_attention = CausalSelfAttention(
-            num_heads=num_heads,
-            key_dim=d_model,
-            dropout=dropout_rate
-        )
-        self.cross_attention = CrossAttention(
-            num_heads=num_heads,
-            key_dim=d_model,
-            dropout=dropout_rate
-        )
-        self.ffn = FeedForward(d_model, dff)
-
-    def call(
-        self, 
-        x: tf.Tensor, 
-        context: tf.Tensor
-    ) -> tf.Tensor:
-        
-        x = self.causal_self_attention(x=x)
-        x = self.cross_attention(x=x, context=context)
-        self.last_attn_scores = self.cross_attention.last_attn_scores
-        x = self.ffn(x)
+        x = self.ffn(x) # type: ignore
         return x
