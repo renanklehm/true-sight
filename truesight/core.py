@@ -127,22 +127,13 @@ class TrueSight(tf.keras.Model):
         n_quantiles: int = 10,
         return_quantiles: bool = False,
         verbose: bool = True
-<<<<<<< Updated upstream
-    ) -> np.ndarray:
-=======
     ) -> np.ndarray | Dataset:
->>>>>>> Stashed changes
 
         if X is None and dataset is None:
             raise Exception("Please provide either X or a dataset.")
         if dataset is not None:
             if X is not None:
                 warnings.warn("Both X and dataset were provided. X will be ignored.", UserWarning)
-<<<<<<< Updated upstream
-            _dataset = dataset.copy()
-            _X = _dataset.get_x()
-        if X is not None:
-=======
             if not isinstance(dataset, Dataset):
                 raise Exception("dataset must be of type Dataset.")
             _dataset = dataset.copy()
@@ -150,7 +141,6 @@ class TrueSight(tf.keras.Model):
         if X is not None:
             if not isinstance(X, (tf.Tensor, np.ndarray)):
                 raise Exception("X must be either a tf.Tensor or np.ndarray.")
->>>>>>> Stashed changes
             _X = X
             
         yhat = []
@@ -164,26 +154,13 @@ class TrueSight(tf.keras.Model):
             yhat = np.mean(yhat, axis=0)
         
         if dataset is not None:
-<<<<<<< Updated upstream
-            dataset.add_predictions(yhat, has_quartiles=return_quantiles)  
-=======
             dataset.add_predictions(yhat, has_quartiles=return_quantiles)
             return dataset
->>>>>>> Stashed changes
         
         return yhat
     
     def evaluate(
         self,
-<<<<<<< Updated upstream
-        dataset: Dataset,
-        **kwargs
-    ) -> float:
-        
-        return super(TrueSight, self).evaluate(
-            x = dataset.get_x(), y = dataset.get_y(),
-            **kwargs) # type: ignore
-=======
         dataset: Dataset | None = None,
         **kwargs
     ) -> float:
@@ -196,7 +173,6 @@ class TrueSight(tf.keras.Model):
             if 'x' in kwargs.keys() or 'y' in kwargs.keys():
                 warnings.warn("Both dataset and x and y were provided. Dataset will be used.", UserWarning)
             return super(TrueSight, self).evaluate(x = dataset.get_x(), y = dataset.get_y(), **kwargs) # type: ignore
->>>>>>> Stashed changes
     
     def plot_training_history(
         self,

@@ -178,62 +178,6 @@ class AutoTune:
 
 def generate_syntetic_data(
     num_time_steps: int,
-<<<<<<< Updated upstream
-    seasonal_lenght: int,
-    num_series: int,
-    start_date: str = '2020-01-01',
-    freq: str = 'MS'
-) -> pd.DataFrame:
-    
-    dataset = []
-    for _ in range(num_series):
-        starting_point = np.random.randint(0, 20)
-        linear_slope = np.random.normal(0, 1)
-        seasonal_amplitude = np.random.randint(1, 10)
-        noise_amplitude = np.random.randint(1, 10)
-        irregularity_amplitude = np.random.randint(1, 10)
-        scale_factor = np.random.randint(1, 10)
-        time = np.arange(num_time_steps)
-        linear_trend = linear_slope * time
-        seasonal_cycle = seasonal_amplitude * np.sin(2 * np.pi * time / seasonal_lenght)
-        noise = np.random.normal(0, noise_amplitude, size=num_time_steps)
-        irregularities = np.random.normal(0, irregularity_amplitude, size=num_time_steps)
-        dataset.append(scale_factor * (linear_trend + seasonal_cycle + noise + irregularities) + starting_point)
-    dataset = np.array(dataset)
-    dataset[dataset < 0] = 0
-    dates = pd.date_range(start=start_date, periods=num_time_steps, freq=freq)
-    ids = [get_random_string(10) for _ in range(num_series)]
-    df = []
-    for i, ts in enumerate(dataset):
-        df.append(pd.DataFrame({"unique_id": np.tile(ids[i], len(ts)), "ds": dates, "y": ts}))
-    return pd.concat(df)
-
-def generate_time_series(
-    length: int, 
-    seasonality_cycles: list[int], 
-    seasonality_amplitudes: list[int], 
-    trend_slopes: list[float], 
-    trend_change_indexes: list[int]
-) -> np.ndarray:
-    
-    series = np.zeros(length)
-    
-    trend = np.arange(length) * trend_slopes[0]
-    for i in range(1, len(trend_slopes)):
-        start_index = trend_change_indexes[i-1]
-        end_index = trend_change_indexes[i]
-        trend[start_index:end_index] = np.arange(end_index - start_index) * trend_slopes[i] + trend[start_index-1]
-    
-    num_seasons = len(seasonality_cycles)
-    for i in range(num_seasons):
-        cycle = seasonality_cycles[i]
-        amplitude = seasonality_amplitudes[i]
-        seasonality = amplitude * np.sin(2 * np.pi * np.arange(length) / cycle)
-        series += seasonality
-    
-    series += trend
-    return series
-=======
     num_series: int,
     start_date: str,
     freq: str,    
@@ -305,7 +249,6 @@ def generate_time_series(
     dataset.reset_index(inplace=True, names = 'ds')
     dataset = dataset.melt(id_vars=['ds'], var_name='unique_id', value_name='y')
     return dataset
->>>>>>> Stashed changes
 
 def get_random_string(length):
     letters = string.ascii_lowercase

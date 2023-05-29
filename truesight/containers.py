@@ -3,10 +3,7 @@ import warnings
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-<<<<<<< Updated upstream
-=======
 import pickle
->>>>>>> Stashed changes
 import matplotlib.pyplot as plt
 from typing import Any
 
@@ -95,19 +92,11 @@ class Dataset():
         has_quartiles: bool,
     ) -> None:
                     
-<<<<<<< Updated upstream
-        if predictions.shape[0] != len(self.timeseries):
-            raise Exception("Predictions shape does not match the dataset.")
-        
-        for i, timeseries in enumerate(self.timeseries):
-            timeseries.prediction = tf.convert_to_tensor(predictions[i])
-=======
         if predictions.shape[1] != len(self.timeseries):
             raise Exception("Predictions shape does not match the dataset.")
         
         for i, timeseries in enumerate(self.timeseries):
             timeseries.prediction = tf.convert_to_tensor(predictions[:,i])
->>>>>>> Stashed changes
         
         self.has_quartiles = has_quartiles
         self.has_predictions = True
@@ -244,11 +233,7 @@ class Dataset():
         _, ax = plt.subplots(figsize=(20, 10))
         ax.plot(in_dates, timeseries.oberved_data, ".-", label = "Oberved data", color = "darkslategray")
         ax.plot(out_dates, timeseries.ground_truth, ".-", label = "Ground truth", color = "darkslategray")
-<<<<<<< Updated upstream
-        ax.plot(out_dates, timeseries.prediction, "v-", label = "TrueSight prediction", color = 'brown')
-=======
         ax.plot(out_dates, tf.reduce_mean(timeseries.prediction, axis=0), "v-", label = "TrueSight prediction", color = 'brown')
->>>>>>> Stashed changes
         if plot_stats_forecasters:
             for model in timeseries.stats_predictions.keys():
                 ax.plot(out_dates, timeseries.stats_predictions[model], label = f"{model} prediction", alpha = max_shaded_alpha)
@@ -273,8 +258,6 @@ class Dataset():
             dataset.add_timeseries(timeseries)
         dataset.assert_dataset()
         return dataset
-<<<<<<< Updated upstream
-=======
 
     def save(
         self,
@@ -300,7 +283,6 @@ class Dataset():
         
         with open(path, 'rb') as f:
             return pickle.load(f)
->>>>>>> Stashed changes
     
     def __getitem__(
         self,
