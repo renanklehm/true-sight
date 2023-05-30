@@ -31,10 +31,16 @@ class Dataset():
         if category_vocab_size > 0:
             self.has_categories = True
             self.category_vocab_size = category_vocab_size
+        else:
+            self.has_categories = False
+            self.category_vocab_size = 0
         
         if descriptor_vocab_size > 0:
             self.has_descriptors = True
             self.descriptor_vocab_size = descriptor_vocab_size
+        else:
+            self.has_descriptors = False
+            self.descriptor_vocab_size = 0
     
     def add_timeseries(
         self,
