@@ -110,7 +110,7 @@ class Dataset():
     def get_x(
         self,
         batch_size: int | None = None
-    ) -> list[tf.Tensor] :
+    ) -> list[tf.Tensor] | list[list[tf.Tensor]]:
         
         if not self.is_asserted:
             raise Exception("Dataset is not asserted.")
