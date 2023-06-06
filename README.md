@@ -61,8 +61,8 @@ models = [
 
 preprocessor = Preprocessor(df)
 X_train, Y_train, ids_train, X_val, Y_val, ids_val, models = preprocessor.make_dataset(
-    forecast_horizon = 12, 
-    season_length = 12,
+    forecast_horizon = forecast_horizon, 
+    season_length = season_length,
     date_freq = "MS", 
     models = models, 
     fallback_model = ModelWrapper(SeasonalNaive, horizon=forecast_horizon, season_length=season_length),
