@@ -1,8 +1,5 @@
 secret_1.csv
-<<<<<<< Updated upstream
 _notebook.ipynb
-=======
->>>>>>> Stashed changes
 test.py
 pickle/*
 best_model*
@@ -12,6 +9,7 @@ hparams*
 *.h5
 *.pypirc
 .vscode*
+M5*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
