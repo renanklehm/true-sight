@@ -61,8 +61,8 @@ models = [
 
 preprocessor = Preprocessor(df)
 X_train, Y_train, ids_train, X_val, Y_val, ids_val, models = preprocessor.make_dataset(
-    forecast_horizon = 12, 
-    season_length = 12,
+    forecast_horizon = forecast_horizon, 
+    season_length = season_length,
     date_freq = "MS", 
     models = models, 
     fallback_model = ModelWrapper(SeasonalNaive, horizon=forecast_horizon, season_length=season_length),
@@ -73,7 +73,7 @@ X_train, Y_train, ids_train, X_val, Y_val, ids_val, models = preprocessor.make_d
 Create the model and automatical automatically find the hyperparameters
 
 ``` python
-optimizer = tf.keras.optimizers.Adam
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 hparams, optimizer = AutoTune(optimizer=optimizer).tune(X_train, Y_train, n_trials = 20, epochs = 10, batch_size = 32, stats_models = models)
 ts = TrueSight(models, forecast_horizon)
 ts.set_hparams(hparams)
@@ -83,7 +83,7 @@ ts.compile(optimizer=optimizer, loss='mse')
 Or set then manually
 
 ``` python
-optimizer = tf.keras.optimizers.Adam
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 ts = TrueSight(models, forecast_horizon, filter_size = 128, context_size = 512, hidden_size = 1024, dropout_rate = 0.1)
 ts.compile(optimizer=optimizer, loss='mse')
 ```
