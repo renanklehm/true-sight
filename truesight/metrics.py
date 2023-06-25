@@ -39,7 +39,7 @@ def smape(
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         smape = abs(y_true - y_pred)
-        smape = smape / (abs(y_true) + abs(y_pred))
+        smape = smape / ((abs(y_true) + abs(y_pred)) / 2)
         smape = np.where((y_true==0) & (y_pred==0), np.zeros(smape.shape), smape)
         smape = np.where(np.isnan(smape), np.ones(smape.shape), smape)
         smape = np.where(np.isinf(smape), np.ones(smape.shape), smape)

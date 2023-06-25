@@ -34,10 +34,14 @@ class Preprocessor():
         self.train_df = self.df[self.df.unique_id.isin(training_ids)]
         self.val_df = self.df[~self.df.unique_id.isin(training_ids)]
         dates = self.df['ds'].sort_values().unique()
-        train_forecast_df = self.get_statistical_forecast(self.train_df[self.train_df['ds'].isin(dates[:-self.forecast_horizon])], models, fallback_model, verbose = verbose)
-        val_forecast_df = self.get_statistical_forecast(self.val_df[self.val_df['ds'].isin(dates[:-self.forecast_horizon])], models, fallback_model, verbose = verbose)
-        self.train_df = pd.merge(self.train_df, train_forecast_df, on = ["unique_id", "ds"], how = "left")
-        self.val_df = pd.merge(self.val_df, val_forecast_df, on = ["unique_id", "ds"], how = "left")
+        if models == []:
+            train_forecast_df = self.train_df[self.train_df['ds'].isin(dates[:-self.forecast_horizon])]
+            val_forecast_df = self.val_df[self.val_df['ds'].isin(dates[:-self.forecast_horizon])]
+        else:
+            train_forecast_df = self.get_statistical_forecast(self.train_df[self.train_df['ds'].isin(dates[:-self.forecast_horizon])], models, fallback_model, verbose = verbose)
+            val_forecast_df = self.get_statistical_forecast(self.val_df[self.val_df['ds'].isin(dates[:-self.forecast_horizon])], models, fallback_model, verbose = verbose)
+            self.train_df = pd.merge(self.train_df, train_forecast_df, on = ["unique_id", "ds"], how = "left")
+            self.val_df = pd.merge(self.val_df, val_forecast_df, on = ["unique_id", "ds"], how = "left")
         X_train, Y_train, ids_train, models = self.format_dataset(self.train_df)
         X_val, Y_val, ids_val, _ = self.format_dataset(self.val_df)
 
@@ -76,8 +80,7 @@ class Preprocessor():
                     model.fit(group['y'].to_numpy())
                 except:
                     if fallback_model is not None:
-                        model = fallback_model(season_length = self.season_length)
-                        model.fit(group['y'].to_numpy())
+                        fallback_model.fit(group['y'].to_numpy())
                     else:
                         raise Exception("Model fit failed. Please provide a fallback model.")
                 return_df.append(pd.DataFrame({
