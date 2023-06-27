@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator
 from truesight.base import StatisticalForecaster
 from statsforecast.models import _TS
+from lightgbm.sklearn import LGBMModel
 from datetime import datetime
 from truesight.core import TrueSight
 
@@ -40,13 +41,9 @@ class ModelWrapper:
                 X = np.insert(X, -1, X.mean())
             mid_size = int(len(X) / 2)
             self.model.fit(np.expand_dims(X[:-mid_size], -1), np.expand_dims(X[mid_size:], -1))
-        elif isinstance(self.model, _TS):
-            self.model.fit(np.squeeze(X))
-        elif isinstance(self.model, StatisticalForecaster):
-            self.model.fit(X)
         else:
             try:
-                self.model.fit(X)
+                self.model.fit(np.squeeze(X))
             except:
                 raise ValueError("Unsupported model type.")
     
