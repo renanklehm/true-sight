@@ -66,6 +66,7 @@ class TrueSight(tf.keras.Model):
         outputs = self.weighted_sum(outputs)
         outputs = self.ff(outputs, training=True)
         outputs = self.output_layer(outputs)
+        outputs = tf.clip_by_value(outputs, clip_value_min=0.0, clip_value_max=tf.float32.max)
         return outputs # type: ignore
     
     def fit(
