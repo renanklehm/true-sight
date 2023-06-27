@@ -135,7 +135,8 @@ class Evaluator:
         yhat = self.y_pred.mean(axis=0)[idx]
 
         range_input = np.arange(0, self.x[-1].shape[1])
-        range_output = np.arange(self.x[-1].shape[1], len(ytrue) + self.x[-1].shape[1])
+        #range_output = np.arange(self.x[-1].shape[1], len(ytrue) + self.x[-1].shape[1])
+        range_output = range_input
 
         _, ax = plt.subplots(figsize=(10, 6), dpi=100)
         ax.plot(range_output, ytrue, ".-", color = "darkslategray", label = "True data")

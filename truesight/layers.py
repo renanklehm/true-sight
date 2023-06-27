@@ -24,7 +24,7 @@ class FeedForward(tf.keras.layers.Layer):
         self.dropout3 = tf.keras.layers.Dropout(dropout_rate)
         self.lstm = tf.keras.layers.LSTM(hidden_size, return_sequences=True)
         self.flatten = tf.keras.layers.Flatten()
-        self.reshape_dense = tf.keras.layers.Dense(hidden_size, activation='relu')
+        self.reshape_dense = tf.keras.layers.Dense(hidden_size, activation='selu')
 
     def build(
         self, 

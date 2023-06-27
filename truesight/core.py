@@ -35,7 +35,7 @@ class TrueSight(tf.keras.Model):
             self.branches[models[i]] = tf.keras.layers.Dense(context_size, activation='selu', name=f'branch_{models[i]}')
         self.weighted_sum = WeightedSumLayer(n_models=self.n_models, name='weighted_sum')
         self.ff = FeedForward(filter_size=filter_size, context_size=context_size, hidden_size=hidden_size, dropout_rate=dropout_rate, name='feed_forward')
-        self.output_layer = tf.keras.layers.Dense(forecast_horizon, activation='relu', name='output')
+        self.output_layer = tf.keras.layers.Dense(forecast_horizon, name='output')
     
     def set_hparams(
         self,
