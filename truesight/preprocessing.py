@@ -59,7 +59,7 @@ class Preprocessor():
                 x.append(pivot[model].iloc[:,:-self.forecast_horizon].to_numpy())
             else:
                 x.append(pivot[model].to_numpy())
-        y = pivot["y"].iloc[:,-self.forecast_horizon:].to_numpy()
+        y = pivot["y"].iloc[:,-self.forecast_horizon:].to_numpy() #type: ignore
         ids = pivot.index
         return x, y, ids, models
 
